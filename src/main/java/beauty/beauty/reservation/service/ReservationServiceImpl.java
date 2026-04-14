@@ -32,7 +32,6 @@ public class ReservationServiceImpl implements ReservationService {
     private final StylistServiceRepository serviceRepository;
     private final ReservationRepository reservationRepository;
     private final OperatingHoursRepository operatingHoursRepository;
-    // 채팅방 생성을 위해 ChatService 주입
     private final ChatService chatService;
 
 

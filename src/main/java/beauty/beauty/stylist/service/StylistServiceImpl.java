@@ -42,7 +42,7 @@ public class StylistServiceImpl implements StylistService{
     public StylistProfileResponse getStylist(Long stylistId) {
         StylistProfile profile = stylistProfileRepository.findById(stylistId)
                 .orElseThrow(() -> new EntityNotFoundException("존재하지 않는 미용사 프로필입니다. id=" + stylistId));
-        return StylistProfileResponse.from(profile);
+        return getDetailedProfileResponse(profile);
     }
 
     // ----- 내 미용사 프로필 조회 ------
@@ -50,7 +50,39 @@ public class StylistServiceImpl implements StylistService{
     public StylistProfileResponse getMyProfile(Long userId) {
         StylistProfile profile = stylistProfileRepository.findByUserId(userId)
                 .orElseThrow(() -> new EntityNotFoundException("해당 유저의 미용사 프로필을 찾을 수 없습니다."));
-        return StylistProfileResponse.from(profile);
+        return getDetailedProfileResponse(profile);
+    }
+
+    private StylistProfileResponse getDetailedProfileResponse(StylistProfile profile) {
+        List<ServiceResponse> services = stylistServiceRepository.findByStylistProfileIdAndIsActiveTrue(profile.getId())
+                .stream().map(s -> ServiceResponse.builder()
+                        .id(s.getId())
+                        .name(s.getName())
+                        .description(s.getDescription())
+                        .price(s.getPrice())
+                        .durationMinutes(s.getDuration())
+                        .build())
+                .collect(Collectors.toList());
+
+        List<WorkingHoursResponse> workingHours = operatingHoursRepository.findByStylistProfileId(profile.getId())
+                .stream().map(h -> WorkingHoursResponse.builder()
+                        .id(h.getId())
+                        .dayOfWeek(h.getDayOfWeek())
+                        .openTime(h.getOpenTime())
+                        .closeTime(h.getCloseTime())
+                        .isDayOff(h.isClosed())
+                        .build())
+                .collect(Collectors.toList());
+
+        List<PortfolioResponse> portfolios = portfolioRepository.findByStylistProfileId(profile.getId())
+                .stream().map(p -> PortfolioResponse.builder()
+                        .id(p.getId())
+                        .imageUrl(p.getImageUrl())
+                        .caption(p.getCaption())
+                        .build())
+                .collect(Collectors.toList());
+
+        return StylistProfileResponse.fromWithDetails(profile, services, workingHours, portfolios);
     }
 
 

@@ -219,11 +219,33 @@ function isPast(day) {
   return d < t
 }
 
-// 시간 슬롯 (09:00 ~ 18:00, 30분 단위)
-const timeSlots = Array.from({ length: 19 }, (_, i) => {
-  const h = Math.floor(i / 2) + 9
-  const m = i % 2 === 0 ? '00' : '30'
-  return `${String(h).padStart(2, '0')}:${m}`
+// 시간 슬롯 (스타일리스트 영업시간 기반 30분 단위)
+const timeSlots = computed(() => {
+  if (!selectedDate.value || !stylist.value.workingHours) return []
+  
+  const d = new Date(currentYear.value, currentMonth.value, selectedDate.value)
+  const jsDay = d.getDay()
+  const backendDay = jsDay === 0 ? 6 : jsDay - 1 // 0=월, 6=일
+
+  const dailyHours = stylist.value.workingHours.find(h => h.dayOfWeek === backendDay)
+  if (!dailyHours || dailyHours.isDayOff || !dailyHours.openTime || !dailyHours.closeTime) return []
+
+  const [openH, openM] = dailyHours.openTime.split(':').map(Number)
+  const [closeH, closeM] = dailyHours.closeTime.split(':').map(Number)
+  
+  const slots = []
+  let curH = openH
+  let curM = openM
+
+  while (curH < closeH || (curH === closeH && curM < closeM)) {
+    slots.push(`${String(curH).padStart(2, '0')}:${String(curM).padStart(2, '0')}`)
+    curM += 30
+    if (curM >= 60) {
+      curH += 1
+      curM -= 60
+    }
+  }
+  return slots
 })
 
 const reservedAtDisplay = computed(() => {

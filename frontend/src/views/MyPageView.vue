@@ -163,6 +163,10 @@
                 <label class="form-label">새 비밀번호</label>
                 <input v-model="pwForm.newPassword" type="password" class="form-input" required minlength="8" />
               </div>
+              <div class="form-group">
+                <label class="form-label">새 비밀번호 확인</label>
+                <input v-model="pwForm.confirmNewPassword" type="password" class="form-input" required minlength="8" />
+              </div>
               <p v-if="pwMsg" :class="pwSuccess ? 'success-msg' : 'error-msg'">{{ pwMsg }}</p>
               <button type="submit" class="btn btn-primary" :disabled="pwSaving">변경하기</button>
             </form>
@@ -325,22 +329,35 @@ async function saveProfile() {
   }
 }
 
-const pwForm = ref({ currentPassword: '', newPassword: '' })
+const pwForm = ref({ currentPassword: '', newPassword: '', confirmNewPassword: '' })
 const pwMsg = ref('')
 const pwSuccess = ref(false)
 const pwSaving = ref(false)
 
 async function savePassword() {
-  pwSaving.value = true
+  pwSuccess.value = false
   pwMsg.value = ''
+  
+  if (pwForm.value.currentPassword === pwForm.value.newPassword) {
+    pwMsg.value = '새 비밀번호는 기존 비밀번호와 달라야 합니다.'
+    return
+  }
+  if (pwForm.value.newPassword !== pwForm.value.confirmNewPassword) {
+    pwMsg.value = '새 비밀번호와 확인용 비밀번호가 일치하지 않습니다.'
+    return
+  }
+
+  pwSaving.value = true
   try {
-    await userApi.changePassword(pwForm.value)
+    await userApi.changePassword({
+      currentPassword: pwForm.value.currentPassword,
+      newPassword: pwForm.value.newPassword
+    })
     pwMsg.value = '비밀번호가 변경되었습니다.'
     pwSuccess.value = true
-    pwForm.value = { currentPassword: '', newPassword: '' }
+    pwForm.value = { currentPassword: '', newPassword: '', confirmNewPassword: '' }
   } catch (e) {
     pwMsg.value = e.response?.data?.message || '변경 중 오류가 발생했습니다.'
-    pwSuccess.value = false
   } finally {
     pwSaving.value = false
   }
@@ -452,7 +469,7 @@ onMounted(() => {
   z-index: 1000;
 }
 .modal {
-  background: var(--color-bg-elevated); padding: 32px; border-radius: var(--radius-lg);
+  background: var(--color-bg-card); padding: 32px; border-radius: var(--radius-lg);
   width: 90%; max-width: 400px;
 }
 .modal-title { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
