@@ -66,6 +66,9 @@ public class SecurityConfig {
                         // 리뷰 조회도 공개
                         .requestMatchers(HttpMethod.GET, "/api/reviews/**").permitAll()
 
+                        // 결제 실패 시 PENDING 즉시 취소 — 리다이렉트 페이지에서 토큰 없이 호출
+                        .requestMatchers(HttpMethod.POST, "/api/payments/cancel-pending").permitAll()
+
                         // OAuth2 콜백 경로 허용
                         .requestMatchers("/login/oauth2/**", "/oauth2/**").permitAll()
 

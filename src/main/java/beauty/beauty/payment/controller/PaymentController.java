@@ -44,4 +44,11 @@ public class PaymentController {
     public ResponseEntity<List<PaymentResponse>> getMyPayments(@LoginUserId Long userId) {
         return ResponseEntity.ok(paymentService.getMyPayments(userId));
     }
+
+    // POST /api/payments/cancel-pending  결제 실패/취소 시 orderId로 PENDING 즉시 취소 (인증 불필요)
+    @PostMapping("/cancel-pending")
+    public ResponseEntity<Void> cancelPending(@RequestParam String orderId) {
+        paymentService.cancelPendingByOrderId(orderId);
+        return ResponseEntity.ok().build();
+    }
 }

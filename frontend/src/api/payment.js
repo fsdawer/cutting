@@ -13,4 +13,7 @@ export const paymentApi = {
 
   /** GET /api/payments/my — 내 결제 내역 조회 */
   getMyPayments: () => api.get('/api/payments/my'),
+
+  /** POST /api/payments/cancel-pending — 결제 실패 시 orderId로 PENDING 즉시 취소 */
+  cancelPending: (orderId) => api.post(`/api/payments/cancel-pending?orderId=${orderId}`),
 }

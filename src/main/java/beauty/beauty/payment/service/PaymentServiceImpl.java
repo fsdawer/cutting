@@ -155,10 +155,15 @@ public class PaymentServiceImpl implements PaymentService {
             throw new RuntimeException("토스페이먼츠 API 호출 중 오류가 발생했습니다.", e);
         }
 
-        // 6. DB 업데이트
+        // 6. DB 업데이트 — 결제 상태 PAID + 연관 예약 상태 CONFIRMED 동시 변경
         payment.setStatus(Payment.PayStatus.PAID);
         payment.setPaymentKey(request.getPaymentKey());
         payment.setPaidAt(LocalDateTime.now());
+
+        Reservation reservation = payment.getReservation();
+        reservation.setStatus(Reservation.Status.CONFIRMED);
+        reservationRepository.save(reservation);
+
         return PaymentResponse.from(payment);
     }
 
@@ -206,6 +211,24 @@ public class PaymentServiceImpl implements PaymentService {
         }
         // 5. 상태 업데이트
         payment.setStatus(Payment.PayStatus.REFUNDED);
+    }
+
+
+    // 결제 실패/취소 시 orderId로 PENDING 결제 + 연관 예약 즉시 취소
+    @Override
+    @Transactional
+    public void cancelPendingByOrderId(String orderId) {
+        paymentRepository.findByOrderId(orderId).ifPresent(payment -> {
+            if (payment.getStatus() != Payment.PayStatus.PENDING) return;
+
+            Reservation reservation = payment.getReservation();
+            if (reservation != null && reservation.getStatus() == Reservation.Status.PENDING) {
+                reservation.setStatus(Reservation.Status.CANCELLED);
+                reservationRepository.save(reservation);
+            }
+            paymentRepository.delete(payment);
+            log.info("결제 실패로 인한 즉시 취소 처리 — orderId: {}", orderId);
+        });
     }
 
 

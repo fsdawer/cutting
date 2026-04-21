@@ -20,4 +20,7 @@ public interface PaymentService {
 
     // 내 결제 내역 조회
     List<PaymentResponse> getMyPayments(Long userId);
+
+    // 결제 실패/취소 시 orderId로 PENDING 결제 + 연관 예약 즉시 취소
+    void cancelPendingByOrderId(String orderId);
 }

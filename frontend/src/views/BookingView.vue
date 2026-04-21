@@ -53,11 +53,12 @@
             <div class="time-slots">
               <button
                 v-for="slot in timeSlots"
-                :key="slot"
+                :key="slot.time"
                 class="time-slot"
-                :class="{ selected: selectedTime === slot }"
-                @click="selectedTime = slot"
-              >{{ slot }}</button>
+                :class="{ selected: selectedTime === slot.time, booked: slot.booked }"
+                :disabled="slot.booked"
+                @click="!slot.booked && (selectedTime = slot.time)"
+              >{{ slot.time }}</button>
             </div>
           </div>
 
@@ -335,9 +336,7 @@ const timeSlots = computed(() => {
 
   while (curH < closeH || (curH === closeH && curM < closeM)) {
     const timeStr = `${String(curH).padStart(2, '0')}:${String(curM).padStart(2, '0')}`
-    if (!bookedTimes.value.includes(timeStr)) {
-      slots.push(timeStr)
-    }
+    slots.push({ time: timeStr, booked: bookedTimes.value.includes(timeStr) })
     curM += 30
     if (curM >= 60) {
       curH += 1
@@ -390,6 +389,8 @@ async function submitReservation() {
     const createdReservationId = res.data.id;
     if (createdReservationId) {
       if (!paymentWidgetInstance) {
+        // 예약은 이미 생성(PENDING)됐으므로 즉시 취소 요청
+        try { await reservationApi.cancel(createdReservationId) } catch (_) {}
         bookingError.value = '결제 시스템이 아직 준비되지 않았습니다. 잠시 후 다시 시도해주세요.'
         booking.value = false
         return
@@ -505,8 +506,9 @@ async function submitReservation() {
   color: var(--color-text-primary); font-size: 13px; cursor: pointer;
   transition: var(--transition);
 }
-.time-slot:hover { border-color: var(--color-gold); color: var(--color-gold); }
+.time-slot:hover:not(.booked) { border-color: var(--color-gold); color: var(--color-gold); }
 .time-slot.selected { background: var(--color-gold); border-color: var(--color-gold); color: #ffffff; font-weight: 600; }
+.time-slot.booked { background: var(--color-bg-surface); color: var(--color-text-muted); cursor: not-allowed; text-decoration: line-through; opacity: 0.5; }
 
 /* Service options */
 .service-category-group { margin-bottom: 24px; }

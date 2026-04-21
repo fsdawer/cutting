@@ -13,7 +13,7 @@ import beauty.beauty.stylist.repository.StylistProfileRepository;
 import beauty.beauty.stylist.repository.StylistServiceRepository;
 import beauty.beauty.user.entity.User;
 import beauty.beauty.user.repository.UserRepository;
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -81,11 +81,12 @@ public class ReservationServiceImpl implements ReservationService {
                     + hours.getOpenTime() + " ~ " + hours.getCloseTime() + ")");
         }
 
-        // 해당 미용사의 해당 시간에 이미 CONFIRMED 예약이 있는지 검증
+        // 해당 미용사의 해당 시간에 이미 PENDING 또는 CONFIRMED 예약이 있는지 검증
+        // PENDING도 포함해야 결제 진행 중인 슬롯을 다른 사람이 잡지 못함
         boolean isBooked = reservationRepository.existsByStylistProfileIdAndReservedAtAndStatusIn(
                 stylist.getId(),
                 request.getReservedAt(),
-                List.of(Reservation.Status.CONFIRMED)
+                List.of(Reservation.Status.PENDING, Reservation.Status.CONFIRMED)
         );
 
         if (isBooked) {
@@ -153,6 +154,7 @@ public class ReservationServiceImpl implements ReservationService {
 
     // 3. 예약 취소하기
     @Override
+    @Transactional
     public void cancelReservation(Long userId, Long reservationId) {
 
         // 예약 조회
@@ -170,6 +172,7 @@ public class ReservationServiceImpl implements ReservationService {
         }
 
         reservation.setStatus(Reservation.Status.CANCELLED);
+        reservationRepository.save(reservation);
     }
 
 
@@ -234,7 +237,8 @@ public class ReservationServiceImpl implements ReservationService {
         LocalDateTime start = parsedDate.atStartOfDay();
         LocalDateTime end = parsedDate.atTime(LocalTime.MAX);
 
-        List<Reservation.Status> validStatuses = List.of(Reservation.Status.PENDING, Reservation.Status.CONFIRMED, Reservation.Status.DONE);
+        // DONE(완료)은 제외 — 시술이 끝난 시간대는 새 예약 받을 수 있어야 함
+        List<Reservation.Status> validStatuses = List.of(Reservation.Status.PENDING, Reservation.Status.CONFIRMED);
 
         List<Reservation> reservations = reservationRepository.findByStylistProfileIdAndReservedAtBetweenAndStatusIn(stylistId, start, end, validStatuses);
 
