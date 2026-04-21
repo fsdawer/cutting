@@ -20,11 +20,11 @@ public class ReservationController {
 
     // POST /api/reservations                  예약 생성
     @PostMapping
-    public ResponseEntity<Void> createReservation(@LoginUserId Long userId,
+    public ResponseEntity<ReservationResponse> createReservation(@LoginUserId Long userId,
                                                   @RequestBody ReservationRequest reservationRequest) {
 
-        reservationService.createReservation(userId,reservationRequest);
-        return ResponseEntity.ok().build();
+        ReservationResponse response = reservationService.createReservation(userId,reservationRequest);
+        return ResponseEntity.ok(response);
     }
 
     // GET  /api/reservations/my               내 예약 목록
@@ -69,5 +69,13 @@ public class ReservationController {
                                                         @RequestParam String status) {
         reservationService.updateReservationStatus(userId, reservationId, status);
         return ResponseEntity.ok().build();
+    }
+
+    // 6. 특정 미용사의 특정 날짜 예약된 시간대 조회 (고객용/예약화면용)
+    @GetMapping("/stylists/{stylistId}/booked-times")
+    public ResponseEntity<List<String>> getStylistBookedTimes(@PathVariable Long stylistId,
+                                                              @RequestParam String date) {
+        List<String> bookedTimes = reservationService.getStylistBookedTimes(stylistId, date);
+        return ResponseEntity.ok(bookedTimes);
     }
 }

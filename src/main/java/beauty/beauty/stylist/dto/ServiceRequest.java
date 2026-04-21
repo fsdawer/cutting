@@ -18,6 +18,8 @@ public class ServiceRequest {
     @NotBlank
     private String name;        // 서비스명 (예: 커트, 펌, 염색)
 
+    private String category;    // 카테고리 (예: 커트, 펌, 염색, 케어, 기타)
+
     private String description; // 서비스 설명
 
     @Min(0)

@@ -87,13 +87,17 @@
             <h2 class="manage-title">서비스 &amp; 가격</h2>
             <div class="service-editor">
               <div v-for="(svc, i) in services" :key="i" class="svc-row">
-                <input v-model="svc.name" class="form-input" placeholder="서비스명 (예: 커트)" />
-                <input v-model.number="svc.durationMinutes" type="number" class="form-input" placeholder="소요시간 (분)" min="1" />
-                <input v-model.number="svc.price" type="number" class="form-input" placeholder="가격 (원)" min="0" />
+                <select v-model="svc.category" class="form-input svc-category">
+                  <option value="">카테고리</option>
+                  <option v-for="c in serviceCategories" :key="c" :value="c">{{ c }}</option>
+                </select>
+                <input v-model="svc.name" class="form-input" placeholder="서비스명 (예: 단발컷)" />
+                <input v-model.number="svc.durationMinutes" type="number" class="form-input" placeholder="시간(분)" min="1" />
+                <input v-model.number="svc.price" type="number" class="form-input" placeholder="가격(원)" min="0" />
                 <button class="icon-btn danger" @click="removeService(i, svc)">✕</button>
               </div>
             </div>
-            <button class="btn btn-ghost" style="margin-top:12px" @click="services.push({name:'',durationMinutes:60,price:0, isNew:true})">
+            <button class="btn btn-ghost" style="margin-top:12px" @click="services.push({name:'',category:'커트',durationMinutes:60,price:0, isNew:true})">
               + 서비스 추가
             </button>
             <p v-if="svcMsg" :class="svcSuccess ? 'success-msg' : 'error-msg'">{{ svcMsg }}</p>
@@ -155,6 +159,9 @@ const hoursForm = ref(
 const hoursMsg = ref('')
 const hoursSuccess = ref(false)
 const hoursSaving = ref(false)
+
+// 서비스 카테고리 목록
+const serviceCategories = ['커트', '펌', '염색', '케어', '두피관리', '기타']
 
 // ── 서비스 ────────────────────────────────────────────────────
 const services = ref([])
@@ -248,6 +255,7 @@ async function saveServices() {
       if (svc.isNew && svc.name) {
         const res = await stylistApi.addService({
           name: svc.name,
+          category: svc.category || '기타',
           durationMinutes: svc.durationMinutes || 60,
           price: svc.price || 0,
           description: svc.description || '',
@@ -257,6 +265,7 @@ async function saveServices() {
       } else if (!svc.isNew && svc.id && svc.name) {
         await stylistApi.updateService(svc.id, {
           name: svc.name,
+          category: svc.category || '기타',
           durationMinutes: svc.durationMinutes || 60,
           price: svc.price || 0,
           description: svc.description || '',
@@ -345,7 +354,8 @@ async function removePortfolio(id) {
 .tilde { color: var(--color-text-muted); }
 
 .service-editor { display: flex; flex-direction: column; gap: 10px; }
-.svc-row { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 10px; align-items: center; }
+.svc-row { display: grid; grid-template-columns: 120px 1fr 80px 1fr auto; gap: 8px; align-items: center; }
+.svc-category { font-size: 13px; }
 .icon-btn {
   width: 32px; height: 32px; border-radius: var(--radius-sm);
   border: 1px solid var(--color-border); background: transparent;

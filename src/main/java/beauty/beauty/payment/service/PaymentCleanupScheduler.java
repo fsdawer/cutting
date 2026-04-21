@@ -14,7 +14,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class PaymentCleanupScheduler {
 
-    private PaymentRepository paymentRepository;
+    private final PaymentRepository paymentRepository;
 
     @Scheduled(fixedDelay = 60000)  // 1분마다 실행
     @Transactional

@@ -40,7 +40,7 @@ public class ReservationServiceImpl implements ReservationService {
     // -> 영업시간보다 빠르거나 끝났을때 예약 했는지 검증 -> 해당 미용사의 해당 시간에 이미 예약이 있는지 검증
     @Override
     @Transactional
-    public void createReservation(Long userId, ReservationRequest request) {
+    public ReservationResponse createReservation(Long userId, ReservationRequest request) {
         // 1. 엔티티 조회
         // 유저 조회
         User user = userRepository.findById(userId)
@@ -92,20 +92,23 @@ public class ReservationServiceImpl implements ReservationService {
             throw new IllegalStateException("해당 시간에는 이미 예약이 차있습니다. 다른 시간을 선택해주세요.");
         }
 
-        // 예약 생성 (즉시 확정 상태로 저장)
+        // 예약 생성 (결제 전 PENDING 상태로 시작)
         Reservation reservation = Reservation.builder()
                 .user(user)
                 .stylistProfile(stylist)
                 .service(stylistServiceItem)
                 .reservedAt(request.getReservedAt())
-                .status(Reservation.Status.CONFIRMED) // 예약 즉시 확정
+                .status(Reservation.Status.PENDING)
                 .requestMemo(request.getRequestMemo())
                 .totalPrice(stylistServiceItem.getPrice())
+                .createdAt(LocalDateTime.now())
                 .build();
-        reservationRepository.save(reservation);
+        Reservation savedReservation = reservationRepository.save(reservation);
 
         // 4. 예약 저장이 완료되자마자 곧바로 채팅방 생성 기능 호출
         // 채팅방 완성 후 호출
+        
+        return ReservationResponse.from(savedReservation, null);
     }
 
 
@@ -161,9 +164,9 @@ public class ReservationServiceImpl implements ReservationService {
             throw new IllegalArgumentException("본인의 예약만 취소할 수 있습니다");
         }
 
-        // CONFIRMED(확정) 상태인 예약만 취소 가능
-        if(reservation.getStatus() != Reservation.Status.CONFIRMED) {
-            throw new IllegalArgumentException("확정(CONFIRMED) 상태인 예약만 취소할 수 있습니다.");
+        // PENDING(결제 대기) 또는 CONFIRMED(확정) 상태인 예약만 취소 가능
+        if(reservation.getStatus() != Reservation.Status.CONFIRMED && reservation.getStatus() != Reservation.Status.PENDING) {
+            throw new IllegalArgumentException("대기 또는 확정 상태인 예약만 취소할 수 있습니다.");
         }
 
         reservation.setStatus(Reservation.Status.CANCELLED);
@@ -223,7 +226,20 @@ public class ReservationServiceImpl implements ReservationService {
 
         // 6. DB 상태 업데이트
         reservation.setStatus(newStatus);
+    }
 
-        
+    @Override
+    public List<String> getStylistBookedTimes(Long stylistId, String date) {
+        LocalDate parsedDate = LocalDate.parse(date);
+        LocalDateTime start = parsedDate.atStartOfDay();
+        LocalDateTime end = parsedDate.atTime(LocalTime.MAX);
+
+        List<Reservation.Status> validStatuses = List.of(Reservation.Status.PENDING, Reservation.Status.CONFIRMED, Reservation.Status.DONE);
+
+        List<Reservation> reservations = reservationRepository.findByStylistProfileIdAndReservedAtBetweenAndStatusIn(stylistId, start, end, validStatuses);
+
+        return reservations.stream()
+                .map(r -> String.format("%02d:%02d", r.getReservedAt().getHour(), r.getReservedAt().getMinute()))
+                .collect(java.util.stream.Collectors.toList());
     }
 }

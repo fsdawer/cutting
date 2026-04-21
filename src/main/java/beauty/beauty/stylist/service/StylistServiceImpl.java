@@ -58,6 +58,7 @@ public class StylistServiceImpl implements StylistService{
                 .stream().map(s -> ServiceResponse.builder()
                         .id(s.getId())
                         .name(s.getName())
+                        .category(s.getCategory())
                         .description(s.getDescription())
                         .price(s.getPrice())
                         .durationMinutes(s.getDuration())
@@ -128,10 +129,10 @@ public class StylistServiceImpl implements StylistService{
         StylistServiceItem serviceItem = StylistServiceItem.builder()
                 .stylistProfile(profile)
                 .name(request.getName())
+                .category(request.getCategory())
                 .price(request.getPrice())
                 .duration(request.getDurationMinutes())
                 .description(request.getDescription())
-                .isActive(true)
                 .build();
 
         StylistServiceItem savedItem = stylistServiceRepository.save(serviceItem);
@@ -140,6 +141,7 @@ public class StylistServiceImpl implements StylistService{
         return ServiceResponse.builder()
                 .id(savedItem.getId())
                 .name(savedItem.getName())
+                .category(savedItem.getCategory())
                 .price(savedItem.getPrice())
                 .durationMinutes(savedItem.getDuration())
                 .description(savedItem.getDescription())
@@ -167,6 +169,7 @@ public class StylistServiceImpl implements StylistService{
         // 4. 엔티티 내부에 구현된 update 메서드를 호출하여if문을 숨김 (도메인 캡슐화)
         serviceItem.update(
                 request.getName(),
+                request.getCategory(),
                 request.getPrice(),
                 request.getDurationMinutes(),
                 request.getDescription()
@@ -178,6 +181,7 @@ public class StylistServiceImpl implements StylistService{
         return ServiceResponse.builder()
                 .id(updatedItem.getId())
                 .name(updatedItem.getName())
+                .category(updatedItem.getCategory())
                 .price(updatedItem.getPrice())
                 .durationMinutes(updatedItem.getDuration())
                 .description(updatedItem.getDescription())

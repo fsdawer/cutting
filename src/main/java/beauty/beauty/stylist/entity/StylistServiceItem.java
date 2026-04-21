@@ -21,6 +21,9 @@ public class StylistServiceItem {
     @Column(nullable = false, length = 100)
     private String name;
 
+    @Column(length = 50)
+    private String category;  // 예: 커트, 펌, 염색, 케어, 기타
+
     @Column(nullable = false)
     private int price;
 
@@ -31,14 +34,18 @@ public class StylistServiceItem {
     private String description;
 
     @Column(name = "is_active", nullable = false)
+    @Builder.Default
     private boolean isActive = true;
 
 
 
     // 서비스 수정 로직 캡슐화
-    public void update(String name, int price, int duration, String description) {
+    public void update(String name, String category, int price, int duration, String description) {
         if (name != null && !name.isBlank()) {
             this.name = name;
+        }
+        if (category != null) {
+            this.category = category;
         }
         if (price > 0) {
             this.price = price;

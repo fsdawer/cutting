@@ -8,6 +8,7 @@ import beauty.beauty.reservation.repository.ReservationRepository;
 import beauty.beauty.user.entity.User;
 import beauty.beauty.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +24,7 @@ import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class PaymentServiceImpl implements PaymentService {
@@ -31,9 +33,11 @@ public class PaymentServiceImpl implements PaymentService {
     private final ReservationRepository reservationRepository;
     private final UserRepository userRepository;
 
-    // TODO: 토스페이먼츠 시크릿 키 — application.yaml에 toss.secret-key 설정 후 @Value로 주입
     @Value("${toss.secret-key}")
     private String secretKey;
+
+    // HttpClient는 스레드 안전하므로 재사용 (매 API 호출마다 새로 생성하면 성능 낭비)
+    private final HttpClient httpClient = HttpClient.newHttpClient();
 
 
     // 결제 준비 — orderId 발급 + Payment(PENDING) DB 저장
@@ -50,7 +54,7 @@ public class PaymentServiceImpl implements PaymentService {
         Reservation reservation = reservationRepository.findById(request.getReservationId())
                 .orElseThrow(() -> new IllegalArgumentException("해당 예약은 없습니다."));
 
-        // 해당 예약이 내 예약인지 검증 ( 유저 조회에서 조회된 아이디가 예약 테이블 안에있는 아이디와 같은지)
+        // 해당 예약이 내 예약인지 검증 (유저 조회에서 조회된 아이디가 예약 테이블 안에있는 아이디와 같은지)
         if(!reservation.getUser().getId().equals(userId)) {
             throw new IllegalArgumentException("본인의 예약만 결제할 수 있습니다.");
         }
@@ -127,25 +131,27 @@ public class PaymentServiceImpl implements PaymentService {
         // 5. 토스페이먼츠 서버에 최종 승인 요청
         try {
             String credentials = Base64.getEncoder()
-                    .encodeToString((secretKey + ":").getBytes(StandardCharsets.UTF_8));
-            HttpClient client = HttpClient.newHttpClient();
+                    .encodeToString((secretKey.trim() + ":").getBytes(StandardCharsets.UTF_8));
             String body = String.format(
                     "{\"paymentKey\":\"%s\",\"orderId\":\"%s\",\"amount\":%d}",
                     request.getPaymentKey(), request.getOrderId(), request.getAmount()
             );
 
             HttpRequest httpRequest = HttpRequest.newBuilder()
-                    .uri(URI.create("https://api.tosspayments.com/v2/payments/confirm"))
+                    .uri(URI.create("https://api.tosspayments.com/v1/payments/confirm"))
                     .header("Authorization", "Basic " + credentials)
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(body))
                     .build();
 
-            HttpResponse<String> response = client.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() != 200) {
+                log.error("토스페이먼츠 승인 실패 [{}]: {}", response.statusCode(), response.body());
                 throw new IllegalStateException("토스페이먼츠 승인 실패: " + response.body());
             }
         } catch (IOException | InterruptedException e) {
+            log.error("토스페이먼츠 통신 중 오류 발생", e);
+            Thread.currentThread().interrupt();
             throw new RuntimeException("토스페이먼츠 API 호출 중 오류가 발생했습니다.", e);
         }
 
@@ -170,30 +176,32 @@ public class PaymentServiceImpl implements PaymentService {
             throw new IllegalStateException("본인의 결제만 환불할 수 있습니다.");
         }
 
-        // 3. PAID 상태인지 확인 (환불 가능 여부)
-        if(payment.getStatus() == Payment.PayStatus.PAID) {
+        // 3. PAID 상태인지 확인 (환불 가능 여부) — PAID 상태가 아니면 환불 불가
+        if(payment.getStatus() != Payment.PayStatus.PAID) {
             throw new IllegalStateException("결제 완료 상태인 건만 환불할 수 있습니다.");
         }
-            // 4. 토스페이먼츠 취소 요청
+        // 4. 토스페이먼츠 취소 요청
         try {
             String credentials = Base64.getEncoder()
-                    .encodeToString((secretKey + ":").getBytes(StandardCharsets.UTF_8));
+                    .encodeToString((secretKey.trim() + ":").getBytes(StandardCharsets.UTF_8));
 
-            HttpClient client = HttpClient.newHttpClient();
             String body = String.format("{\"cancelReason\":\"%s\"}", request.getCancelReason());
 
             HttpRequest httpRequest = HttpRequest.newBuilder()
-                    .uri(URI.create("https://api.tosspayments.com/v2/payments/" + payment.getPaymentKey() + "/cancel"))
+                    .uri(URI.create("https://api.tosspayments.com/v1/payments/" + payment.getPaymentKey() + "/cancel"))
                     .header("Authorization", "Basic " + credentials)
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(body))
                     .build();
 
-            HttpResponse<String> response = client.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() != 200) {
+                log.error("토스페이먼츠 환불 실패 [{}]: {}", response.statusCode(), response.body());
                 throw new IllegalStateException("토스페이먼츠 환불 실패: " + response.body());
             }
         } catch (IOException | InterruptedException e) {
+            log.error("토스페이먼츠 환불 통신 중 오류 발생", e);
+            Thread.currentThread().interrupt();
             throw new RuntimeException("토스페이먼츠 API 호출 중 오류가 발생했습니다.", e);
         }
         // 5. 상태 업데이트

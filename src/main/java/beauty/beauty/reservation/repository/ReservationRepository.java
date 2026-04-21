@@ -11,5 +11,6 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
     List<Reservation> findByStylistProfileId(Long stylistId);
     List<Reservation> findByUserIdAndStatus(Long userId, Reservation.Status status);
     boolean existsByStylistProfileIdAndReservedAtAndStatusIn(Long stylistId, LocalDateTime reservedAt, List<Reservation.Status> statuses);
+    List<Reservation> findByStylistProfileIdAndReservedAtBetweenAndStatusIn(Long stylistId, LocalDateTime start, LocalDateTime end, List<Reservation.Status> statuses);
 
 }

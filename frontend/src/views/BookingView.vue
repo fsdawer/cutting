@@ -81,18 +81,26 @@
             <!-- Service Select -->
             <div class="form-group" style="margin-bottom:24px">
               <label class="form-label">서비스 선택</label>
-              <div class="service-options">
-                <button
-                  v-for="s in services"
-                  :key="s.id"
-                  class="service-opt"
-                  :class="{ selected: selectedService?.id === s.id }"
-                  @click="selectedService = s"
-                >
-                  <span class="so-name">{{ s.name }}</span>
-                  <span class="so-price">{{ s.price?.toLocaleString() }}원</span>
-                </button>
+              
+              <div v-for="(list, cat) in groupedServices" :key="cat" class="service-category-group">
+                <h4 class="service-cat-title">{{ cat }}</h4>
+                <div class="service-options">
+                  <button
+                    v-for="s in list"
+                    :key="s.id"
+                    class="service-opt"
+                    :class="{ selected: selectedService?.id === s.id }"
+                    @click="selectedService = s"
+                  >
+                    <div style="text-align:left">
+                      <span class="so-name">{{ s.name }}</span>
+                      <p class="so-desc" v-if="s.description">{{ s.description }}</p>
+                    </div>
+                    <span class="so-price">{{ s.price?.toLocaleString() }}원</span>
+                  </button>
+                </div>
               </div>
+              
               <p v-if="!services.length" style="color:var(--color-text-muted);font-size:14px;margin-top:12px">
                 등록된 서비스가 없습니다.
               </p>
@@ -120,9 +128,9 @@
           </div>
         </div>
 
-        <!-- Step 3: 확인 및 예약 -->
+        <!-- Step 3: 확인 및 결제 -->
         <div v-if="currentStep === 2" class="card step-card">
-          <h2 class="step-title">예약 확인</h2>
+          <h2 class="step-title">예약 확인 &amp; 결제</h2>
 
           <div class="confirm-info">
             <div class="confirm-row">
@@ -147,6 +155,12 @@
             </div>
           </div>
 
+          <!-- 토스 결제 위젯 영역 -->
+          <div v-show="tossReady" class="toss-area" style="margin-top:24px;">
+            <div id="payment-widget"></div>
+            <div id="agreement-widget"></div>
+          </div>
+
           <p v-if="bookingError" class="error-msg">{{ bookingError }}</p>
 
           <div class="step-actions">
@@ -157,7 +171,7 @@
               @click="submitReservation"
             >
               <span v-if="booking" class="spinner" style="width:18px;height:18px;border-width:2px;"></span>
-              <span v-else>예약 확정하기 →</span>
+              <span v-else>결제하기</span>
             </button>
           </div>
         </div>
@@ -167,10 +181,11 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { stylistApi } from '@/api/stylist'
 import { reservationApi } from '@/api/reservation'
+import { paymentApi } from '@/api/payment'
 
 const route = useRoute()
 const router = useRouter()
@@ -182,12 +197,93 @@ const steps = ['날짜/시간', '서비스/요구사항', '예약 확인']
 const stylist = ref({})
 const services = ref([])
 const servicesLoading = ref(false)
+
+const groupedServices = computed(() => {
+  const groups = {}
+  services.value.forEach(s => {
+    const cat = s.category || '기타'
+    if (!groups[cat]) groups[cat] = []
+    groups[cat].push(s)
+  })
+  return groups
+})
+
 const selectedService = ref(null)
 const selectedDate = ref(null)
 const selectedTime = ref(null)
 const requestText = ref('')
 const booking = ref(false)
 const bookingError = ref('')
+const bookedTimes = ref([])
+
+const tossReady = ref(false)
+let tossPaymentsInstance = null
+let paymentWidgetInstance = null
+
+function loadTossScript() {
+  return new Promise((resolve) => {
+    if (window.TossPayments) { resolve(true); return }
+    const script = document.createElement('script')
+    script.src = 'https://js.tosspayments.com/v2/standard'
+    script.onload = () => resolve(true)
+    script.onerror = () => resolve(false)
+    document.head.appendChild(script)
+  })
+}
+
+watch(selectedDate, async (newVal) => {
+  if (!newVal) {
+    bookedTimes.value = []
+    selectedTime.value = null
+    return
+  }
+  selectedTime.value = null
+  const mm = String(currentMonth.value + 1).padStart(2, '0')
+  const dd = String(newVal).padStart(2, '0')
+  const dateStr = `${currentYear.value}-${mm}-${dd}`
+  try {
+    const res = await reservationApi.getBookedTimes(stylistId, dateStr)
+    bookedTimes.value = res.data || []
+  } catch (e) {
+    console.error('예약된 시간 조회 실패', e)
+    bookedTimes.value = []
+  }
+})
+
+watch([currentStep, tossReady], async ([newStep, isReady]) => {
+  if (newStep === 2 && isReady && window.TossPayments && selectedService.value) {
+    await nextTick()
+    await initTossWidget(selectedService.value.price || 0)
+  }
+})
+
+async function initTossWidget(amount) {
+  try {
+    const clientKey = import.meta.env.VITE_TOSS_CLIENT_KEY || 'test_gck_docs_Ovk5rk1EwkEbP0W43n07xlzm'
+    tossPaymentsInstance = window.TossPayments(clientKey)
+    paymentWidgetInstance = tossPaymentsInstance.widgets({ customerKey: 'ANONYMOUS' })
+
+    await paymentWidgetInstance.setAmount({
+      currency: 'KRW',
+      value: amount,
+    })
+
+    await Promise.all([
+      paymentWidgetInstance.renderPaymentMethods({
+        selector: '#payment-widget',
+        variantKey: 'DEFAULT',
+      }),
+      paymentWidgetInstance.renderAgreement({
+        selector: '#agreement-widget',
+        variantKey: 'AGREEMENT',
+      }),
+    ])
+  } catch (error) {
+    console.error('토스 위젯 초기화 에러:', error)
+    bookingError.value = '토스페이먼츠(결제모듈) 불러오기에 실패했습니다: ' + (error.message || '알 수 없는 에러')
+    paymentWidgetInstance = null
+  }
+}
 
 // Calendar
 const today = new Date()
@@ -238,7 +334,10 @@ const timeSlots = computed(() => {
   let curM = openM
 
   while (curH < closeH || (curH === closeH && curM < closeM)) {
-    slots.push(`${String(curH).padStart(2, '0')}:${String(curM).padStart(2, '0')}`)
+    const timeStr = `${String(curH).padStart(2, '0')}:${String(curM).padStart(2, '0')}`
+    if (!bookedTimes.value.includes(timeStr)) {
+      slots.push(timeStr)
+    }
     curM += 30
     if (curM >= 60) {
       curH += 1
@@ -266,6 +365,11 @@ onMounted(async () => {
   } finally {
     servicesLoading.value = false
   }
+
+  const loaded = await loadTossScript()
+  if (loaded && window.TossPayments) {
+    tossReady.value = true
+  }
 })
 
 async function submitReservation() {
@@ -276,18 +380,39 @@ async function submitReservation() {
     const dd = String(selectedDate.value).padStart(2, '0')
     const reservedAt = `${currentYear.value}-${mm}-${dd}T${selectedTime.value}:00`
 
-    await reservationApi.create({
+    const res = await reservationApi.create({
       stylistId: Number(stylistId),
       serviceId: selectedService.value.id,
       reservedAt,
       requestMemo: requestText.value || null,
     })
 
-    alert('예약이 완료되었습니다! 마이페이지에서 확인하세요.')
-    router.push('/mypage')
+    const createdReservationId = res.data.id;
+    if (createdReservationId) {
+      if (!paymentWidgetInstance) {
+        bookingError.value = '결제 시스템이 아직 준비되지 않았습니다. 잠시 후 다시 시도해주세요.'
+        booking.value = false
+        return
+      }
+
+      // 2. 결제 API prepare 호출하여 orderId 가져오기
+      const prepareRes = await paymentApi.prepare(createdReservationId)
+      const orderId = prepareRes.data.orderId
+
+      // 3. 토스 팝업 결제창 호출
+      await paymentWidgetInstance.requestPayment({
+        orderId: orderId,
+        orderName: selectedService.value.name,
+        successUrl: `${window.location.origin}/payment/success`,
+        failUrl: `${window.location.origin}/payment/fail`,
+      })
+      // 결제 진행되면 여기서 리다이렉트 되므로 별도 액션 없음
+      return;
+    } else {
+      router.push('/mypage');
+    }
   } catch (e) {
-    bookingError.value = e.response?.data?.message || '예약 중 오류가 발생했습니다.'
-  } finally {
+    bookingError.value = e.response?.data?.message || e.message || '예약 중 오류가 발생했습니다.'
     booking.value = false
   }
 }
@@ -384,6 +509,9 @@ async function submitReservation() {
 .time-slot.selected { background: var(--color-gold); border-color: var(--color-gold); color: #ffffff; font-weight: 600; }
 
 /* Service options */
+.service-category-group { margin-bottom: 24px; }
+.service-cat-title { font-size: 14px; font-weight: 700; color: var(--color-text-secondary); margin-bottom: 12px; border-bottom: 1px solid var(--color-border); padding-bottom: 6px; }
+
 .service-options { display: flex; flex-direction: column; gap: 8px; }
 .service-opt {
   display: flex; justify-content: space-between; align-items: center;
@@ -393,8 +521,9 @@ async function submitReservation() {
 }
 .service-opt:hover { border-color: rgba(201,169,110,0.4); }
 .service-opt.selected { border-color: var(--color-gold); background: rgba(201,169,110,0.08); }
-.so-name { font-size: 15px; color: var(--color-text-primary); }
-.so-price { font-size: 15px; font-weight: 600; color: var(--color-gold); }
+.so-name { font-size: 15px; font-weight: 600; color: var(--color-text-primary); display: block; margin-bottom: 2px; }
+.so-desc { font-size: 12px; color: var(--color-text-muted); }
+.so-price { font-size: 15px; font-weight: 700; color: var(--color-gold); flex-shrink: 0; }
 
 /* Confirm */
 .confirm-info {

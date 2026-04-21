@@ -36,7 +36,8 @@ public class Reservation {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private Status status = Status.CONFIRMED;
+    @Builder.Default
+    private Status status = Status.PENDING;
 
     @Column(name = "request_memo", columnDefinition = "TEXT")
     private String requestMemo;
@@ -45,7 +46,8 @@ public class Reservation {
     private int totalPrice;
 
     @Column(name = "created_at", nullable = false, updatable = false)
+    @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
 
-    public enum Status { CONFIRMED, DONE, CANCELLED }
+    public enum Status { PENDING, CONFIRMED, DONE, CANCELLED }
 }

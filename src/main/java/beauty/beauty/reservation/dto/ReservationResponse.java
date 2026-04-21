@@ -18,6 +18,7 @@ public class ReservationResponse {
     private Long stylistId;
     private String stylistName;
     private String salonName;
+    private String location;
     private String stylistProfileImg;
     private String serviceName;
     private LocalDateTime reservedAt;
@@ -32,6 +33,7 @@ public class ReservationResponse {
                 .stylistId(reservation.getStylistProfile().getId())
                 .stylistName(reservation.getStylistProfile().getUser().getName())
                 .salonName(reservation.getStylistProfile().getSalonName())
+                .location(reservation.getStylistProfile().getLocation())
                 .stylistProfileImg(reservation.getStylistProfile().getUser().getProfileImg())
                 .serviceName(reservation.getService().getName())
                 .reservedAt(reservation.getReservedAt())

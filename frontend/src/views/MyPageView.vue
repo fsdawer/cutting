@@ -86,10 +86,10 @@
                       :to="`/chat/${r.chatRoomId}`"
                       class="btn btn-primary btn-sm"
                     >채팅</RouterLink>
-                    <RouterLink
-                      :to="`/stylist/${r.stylistId}`"
+                    <button
                       class="btn btn-ghost btn-sm"
-                    >상세보기</RouterLink>
+                      @click="openResModal(r)"
+                    >상세보기</button>
                     <button
                       v-if="r.status === 'CONFIRMED' || r.status === 'PENDING'"
                       class="btn btn-ghost btn-sm"
@@ -208,6 +208,53 @@
         </form>
       </div>
     </div>
+
+    <!-- Reservation Detail Modal -->
+    <div v-if="showResModal" class="modal-overlay" @click.self="showResModal = false">
+      <div class="modal">
+        <h2 class="modal-title" style="margin-bottom:20px;">예약 상세 정보</h2>
+
+        <div class="res-detail-info" v-if="selectedRes">
+          <div class="confirm-row">
+            <span class="cr-label">예약 상태</span>
+            <span class="badge" :class="statusBadge(selectedRes.status)">{{ statusLabel(selectedRes.status) }}</span>
+          </div>
+          <div class="confirm-row">
+            <span class="cr-label">미용사</span>
+            <span class="cr-value">{{ selectedRes.stylistName }} · {{ selectedRes.salonName }}</span>
+          </div>
+          <div class="confirm-row">
+            <span class="cr-label">위치</span>
+            <span class="cr-value">{{ selectedRes.location || '위치 미상' }}</span>
+          </div>
+          <div class="confirm-row">
+            <span class="cr-label">예약 일시</span>
+            <span class="cr-value">{{ formatDate(selectedRes.reservedAt) }}</span>
+          </div>
+          <div class="confirm-row">
+            <span class="cr-label">서비스</span>
+            <span class="cr-value">{{ selectedRes.serviceName }}</span>
+          </div>
+          
+          <div class="confirm-row total">
+            <span class="cr-label">결제 금액</span>
+            <span class="cr-value gold">{{ selectedRes.totalPrice?.toLocaleString() }}원</span>
+          </div>
+          <p v-if="selectedRes.status === 'PENDING'" style="text-align:right; font-size:12px; color:var(--color-danger); margin-top:4px;">
+            결제가 아직 완료되지 않았습니다.
+          </p>
+        </div>
+
+        <div class="modal-actions" style="margin-top:24px;">
+          <RouterLink
+            :to="`/stylist/${selectedRes.stylistId}`"
+            class="btn btn-outline"
+            style="margin-right:auto;"
+          >미용사 프로필 보기</RouterLink>
+          <button class="btn btn-primary" @click="showResModal = false">닫기</button>
+        </div>
+      </div>
+    </div>
   </main>
 </template>
 
@@ -246,10 +293,18 @@ const filteredReservations = computed(() => {
 })
 
 function statusLabel(s) {
-  return { PENDING: '대기중', CONFIRMED: '예약확정', DONE: '완료', CANCELLED: '취소됨' }[s] || s
+  return { PENDING: '대기중(미결제)', CONFIRMED: '예약확정', DONE: '완료', CANCELLED: '취소됨' }[s] || s
 }
 function statusBadge(s) {
   return { PENDING: 'badge-gold', CONFIRMED: 'badge-green', DONE: 'badge-gray', CANCELLED: 'badge-red' }[s] || ''
+}
+
+const showResModal = ref(false)
+const selectedRes = ref(null)
+
+function openResModal(r) {
+  selectedRes.value = r
+  showResModal.value = true
 }
 
 function formatDate(str) {
@@ -284,6 +339,7 @@ async function cancelReservation(id) {
 // ── 결제 내역 ────────────────────────────────────────────────
 const payLoading = ref(false)
 const payments = ref([])
+
 
 function payStatusLabel(s) {
   return { PENDING: '결제대기', PAID: '결제완료', REFUNDED: '환불완료', FAILED: '실패' }[s] || s
@@ -476,6 +532,13 @@ onMounted(() => {
 .modal-sub { font-size: 14px; color: var(--color-text-secondary); margin-bottom: 24px; }
 .upgrade-form { display: flex; flex-direction: column; gap: 16px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
+
+.res-detail-info { display: flex; flex-direction: column; gap: 12px; }
+.confirm-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.cr-label { font-size: 13px; color: var(--color-text-muted); flex-shrink: 0; }
+.cr-value { font-size: 14px; color: var(--color-text-primary); text-align: right; }
+.confirm-row.total { padding-top: 14px; border-top: 1px solid var(--color-border); }
+.cr-value.gold { font-size: 18px; font-weight: 700; color: var(--color-gold); }
 
 @media (max-width: 768px) {
   .mypage-layout { grid-template-columns: 1fr; }

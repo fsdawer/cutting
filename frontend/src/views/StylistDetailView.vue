@@ -66,7 +66,7 @@
               <li v-for="h in workingHours" :key="h.dayOfWeek">
                 <span class="day">{{ dayName(h.dayOfWeek) }}</span>
                 <span :class="h.isDayOff ? 'closed' : 'time'">
-                  {{ h.isDayOff ? '휴무' : `${h.openTime?.slice(0,5)} - ${h.closeTime?.slice(0,5)}` }}
+                  {{ h.isDayOff ? '휴무' : formatHours(h.openTime, h.closeTime) }}
                 </span>
               </li>
             </ul>
@@ -146,7 +146,11 @@ const portfolios = ref([])
 const workingHours = ref([])
 
 const DAY_NAMES = ['월', '화', '수', '목', '금', '토', '일']
-const dayName = (idx) => DAY_NAMES[idx] ?? idx
+const dayName = (idx) => DAY_NAMES[idx] ?? String(idx)
+const formatHours = (open, close) => {
+  if (!open || !close) return '미설정'
+  return `${open.slice(0, 5)} - ${close.slice(0, 5)}`
+}
 
 onMounted(async () => {
   try {

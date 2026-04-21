@@ -33,15 +33,16 @@ public class Payment {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
+    @Builder.Default
     private PayStatus status = PayStatus.PENDING;
 
     @Column(name = "paid_at")
     private LocalDateTime paidAt;
 
     @Column(name = "created_at", nullable = false, updatable = false)
+    @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
 
     public enum Method { TOSS, NAVER_PAY, KAKAO_PAY }
     public enum PayStatus { PENDING, PAID, REFUNDED }
-    public enum Status { CONFIRMED, PAID, DONE, CANCELLED }
 }

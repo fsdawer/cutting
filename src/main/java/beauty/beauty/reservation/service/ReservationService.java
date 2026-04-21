@@ -15,7 +15,7 @@ public interface ReservationService {
      * @param userId 예약을 요청하는 일반 사용자(USER)의 ID
      * @param request 예약 시 필요한 정보 (미용사 ID, 서비스 ID, 예약 시간, 요청 메모)
      */
-    void createReservation(Long userId, ReservationRequest request);
+    ReservationResponse createReservation(Long userId, ReservationRequest request);
 
 
 
@@ -65,6 +65,13 @@ public interface ReservationService {
      * @return 미용사에게 들어온 예약 내역 목록
      */
     List<ReservationResponse> getStylistReservations(Long userId);
+
+    
+
+    /**
+     * 특정 날짜에 미용사가 예약된 시간 목록 (HH:mm)을 반환
+     */
+    List<String> getStylistBookedTimes(Long stylistId, String date);
 
 
 

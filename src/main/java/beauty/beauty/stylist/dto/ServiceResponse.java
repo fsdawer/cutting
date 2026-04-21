@@ -10,6 +10,7 @@ public class ServiceResponse {
 
     private Long id;
     private String name;
+    private String category;     // 커트, 펌, 염색, 케어, 기타
     private String description;
     private int price;
     private int durationMinutes;
