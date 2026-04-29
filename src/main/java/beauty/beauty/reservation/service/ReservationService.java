@@ -2,6 +2,7 @@ package beauty.beauty.reservation.service;
 
 import beauty.beauty.reservation.dto.ReservationRequest;
 import beauty.beauty.reservation.dto.ReservationResponse;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -85,4 +86,9 @@ public interface ReservationService {
      * @param status 변경할 상태값 (CONFIRMED, DONE, CANCELLED 등)
      */
     void updateReservationStatus(Long userId, Long reservationId, String status);
+
+    /**
+     * 예약 이미지 업로드 (선택)
+     */
+    void uploadImages(Long userId, Long reservationId, List<MultipartFile> files);
 }

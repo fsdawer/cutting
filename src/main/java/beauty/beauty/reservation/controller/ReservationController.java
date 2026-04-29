@@ -6,8 +6,10 @@ import beauty.beauty.reservation.dto.ReservationResponse;
 import beauty.beauty.reservation.service.ReservationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
 
 import java.util.List;
 
@@ -68,6 +70,19 @@ public class ReservationController {
                                                         @PathVariable Long reservationId,
                                                         @RequestParam String status) {
         reservationService.updateReservationStatus(userId, reservationId, status);
+        return ResponseEntity.ok().build();
+    }
+
+    // 이미지 업로드 (선택)
+    @PostMapping("/{reservationId}/images")
+    public ResponseEntity<Void> uploadImages(
+            @LoginUserId Long userId,
+            @PathVariable Long reservationId,
+            @RequestParam(value = "images", required = false) List<MultipartFile> images
+    ) {
+        if (images != null && !images.isEmpty()) {
+            reservationService.uploadImages(userId, reservationId, images);
+        }
         return ResponseEntity.ok().build();
     }
 

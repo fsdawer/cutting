@@ -1,13 +1,15 @@
 <template>
-  <main class="page auth-page">
-    <div class="auth-card card">
-      <div class="auth-header">
-        <RouterLink to="/" class="auth-logo">✂ BeautyBook</RouterLink>
-        <h1 class="auth-title">회원가입</h1>
-        <p class="auth-sub">역할을 선택하고 계정을 만드세요</p>
+  <main class="auth-page">
+    <div class="auth-box">
+      <div class="auth-logo">
+        <RouterLink to="/">
+          <span class="logo-mark">✂</span>
+          <span class="logo-text">CutIng</span>
+        </RouterLink>
       </div>
 
-
+      <h1 class="auth-title">회원가입</h1>
+      <p class="auth-sub">계정을 만들어 예약을 시작하세요</p>
 
       <form @submit.prevent="handleRegister" class="auth-form">
         <div class="form-group">
@@ -24,7 +26,7 @@
         </div>
         <div class="form-group">
           <label class="form-label">핸드폰 번호</label>
-          <input v-model="form.phone" type="tel" class="form-input" placeholder="010-XXXX-XXXX" />
+          <input v-model="form.phone" type="tel" class="form-input" placeholder="010-0000-0000" />
         </div>
         <div class="form-group">
           <label class="form-label">비밀번호</label>
@@ -35,9 +37,7 @@
           <input v-model="form.passwordConfirm" type="password" class="form-input" placeholder="비밀번호 재입력" required />
         </div>
 
-
-
-        <p v-if="errorMsg" class="error-msg">{{ errorMsg }}</p>
+        <p v-if="errorMsg" class="msg-error">{{ errorMsg }}</p>
 
         <button type="submit" class="btn btn-primary btn-full btn-lg" :disabled="loading">
           <span v-if="loading" class="spinner" style="width:18px;height:18px;border-width:2px;"></span>
@@ -47,7 +47,7 @@
 
       <p class="auth-switch">
         이미 계정이 있으신가요?
-        <RouterLink to="/login" class="link-gold">로그인</RouterLink>
+        <RouterLink to="/login" class="link-primary">로그인</RouterLink>
       </p>
     </div>
   </main>
@@ -58,17 +58,12 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 
-const router = useRouter()
+const router  = useRouter()
 const loading = ref(false)
 const errorMsg = ref('')
 
 const form = ref({
-  username: '',
-  name: '',
-  email: '',
-  phone: '',
-  password: '',
-  passwordConfirm: '',
+  username: '', name: '', email: '', phone: '', password: '', passwordConfirm: '',
 })
 
 async function handleRegister() {
@@ -99,26 +94,40 @@ async function handleRegister() {
 
 <style scoped>
 .auth-page {
+  min-height: calc(100vh - var(--navbar-h));
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: calc(100vh - 68px);
-  padding: 40px 0;
+  padding: 40px 16px;
+  background: var(--bg);
 }
-.auth-card {
+
+.auth-box {
   width: 100%;
-  max-width: 480px;
-  padding: 40px;
+  max-width: 460px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 40px 36px;
+  box-shadow: var(--shadow);
 }
-.auth-header { text-align: center; margin-bottom: 28px; }
-.auth-logo { font-size: 22px; font-weight: 700; color: var(--color-gold); }
-.auth-title { font-size: 24px; font-weight: 700; margin-top: 20px; margin-bottom: 8px; }
-.auth-sub { color: var(--color-text-secondary); font-size: 14px; }
 
-.auth-form { display: flex; flex-direction: column; gap: 16px; margin-bottom: 20px; }
+.auth-logo {
+  text-align: center;
+  margin-bottom: 28px;
+}
+.auth-logo a { display: inline-flex; align-items: center; gap: 8px; }
+.logo-mark { font-size: 20px; color: var(--primary); }
+.logo-text  { font-size: 18px; font-weight: 700; color: var(--text); }
 
-.error-msg { color: var(--color-danger); font-size: 13px; text-align: center; }
-.auth-switch { text-align: center; font-size: 14px; color: var(--color-text-secondary); }
-.link-gold { color: var(--color-gold); font-weight: 600; margin-left: 4px; }
-.link-gold:hover { text-decoration: underline; }
+.auth-title { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+.auth-sub   { font-size: 13px; color: var(--text-sub); margin-bottom: 28px; }
+
+.auth-form { display: flex; flex-direction: column; gap: 14px; margin-bottom: 20px; }
+
+.msg-error { color: var(--red); font-size: 13px; }
+
+.auth-switch { text-align: center; font-size: 14px; color: var(--text-sub); }
+.link-primary { color: var(--primary); font-weight: 600; margin-left: 4px; }
+.link-primary:hover { text-decoration: underline; }
 </style>

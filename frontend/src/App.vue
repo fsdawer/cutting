@@ -6,11 +6,16 @@
         <component :is="Component" :key="route.path" />
       </Transition>
     </RouterView>
+    <ChatWidget v-if="auth.isLoggedIn" />
   </div>
 </template>
 
 <script setup>
 import Navbar from '@/components/Navbar.vue'
+import ChatWidget from '@/components/ChatWidget.vue'
+import { useAuthStore } from '@/stores/authStore'
+
+const auth = useAuthStore()
 </script>
 
 <style scoped>

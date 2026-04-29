@@ -7,7 +7,9 @@ import beauty.beauty.auth.dto.TokenResponse;
 import beauty.beauty.global.exception.CustomException;
 import beauty.beauty.global.exception.ErrorCode;
 import beauty.beauty.global.jwt.JwtUtil;
+import beauty.beauty.stylist.entity.Salon;
 import beauty.beauty.stylist.entity.StylistProfile;
+import beauty.beauty.stylist.repository.SalonRepository;
 import beauty.beauty.stylist.repository.StylistProfileRepository;
 import beauty.beauty.user.entity.EmailVerification;
 import beauty.beauty.user.entity.User;
@@ -31,6 +33,7 @@ public class AuthServiceImpl implements AuthService {
     private final UserRepository userRepository;
     private final EmailVerificationRepository emailVerificationRepository;
     private final StylistProfileRepository stylistProfileRepository;
+    private final SalonRepository salonRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
     private final JavaMailSender mailSender;
@@ -63,15 +66,18 @@ public class AuthServiceImpl implements AuthService {
                 .build();
         userRepository.save(user);
 
-        // STYLIST인 경우 프로필 추가 저장
+        // STYLIST인 경우 미용실 + 프로필 저장
         if (User.Role.STYLIST.equals(user.getRole())) {
-            StylistProfile profile = StylistProfile.builder()
+            Salon salon = salonRepository.save(Salon.builder()
+                    .name(request.getSalonName())
+                    .address(request.getLocation())
+                    .phone(request.getSalonPhone())
+                    .description(request.getSalonDescription())
+                    .build());
+            stylistProfileRepository.save(StylistProfile.builder()
                     .user(user)
-                    .salonName(request.getSalonName())
-                    .location(request.getLocation())
-                    // 경험, 평점, 리뷰수 등은 엔티티의 기본값 또는 null(int는 0)로 자동 설정됨
-                    .build();
-            stylistProfileRepository.save(profile);
+                    .salon(salon)
+                    .build());
         }
 
         // 3. 이메일 인증 메일 발송
@@ -101,9 +107,10 @@ public class AuthServiceImpl implements AuthService {
             throw new CustomException(ErrorCode.EMAIL_NOT_VERIFIED);
         }
 
-        // 4. JWT 발급
+        // 4. JWT 발급 후 Refresh Token DB 저장
         String accessToken  = jwtUtil.generateAccessToken(user.getId(), user.getUsername(), user.getRole().name());
         String refreshToken = jwtUtil.generateRefreshToken(user.getId());
+        user.setRefreshToken(refreshToken);
 
         return new TokenResponse(accessToken, refreshToken, user.getRole().name());
     }
@@ -174,7 +181,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public TokenResponse refresh(String refreshToken) {
-        // 1. Refresh Token 유효성 검사
+        // 1. 서명 유효성 검사
         if (!jwtUtil.isValid(refreshToken)) {
             throw new CustomException(ErrorCode.INVALID_TOKEN);
         }
@@ -184,9 +191,15 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
-        // 3. Access Token + Refresh Token 재발급 (Rotation)
+        // 3. DB에 저장된 토큰과 일치 여부 확인 (로그아웃된 사용자 차단)
+        if (!refreshToken.equals(user.getRefreshToken())) {
+            throw new CustomException(ErrorCode.INVALID_TOKEN);
+        }
+
+        // 4. Access Token + Refresh Token 재발급 (Rotation) 후 DB 갱신
         String newAccessToken  = jwtUtil.generateAccessToken(user.getId(), user.getUsername(), user.getRole().name());
         String newRefreshToken = jwtUtil.generateRefreshToken(user.getId());
+        user.setRefreshToken(newRefreshToken);
 
         return new TokenResponse(newAccessToken, newRefreshToken, user.getRole().name());
     }
@@ -197,8 +210,8 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public void logout(Long userId) {
-        // JWT는 Stateless이므로 서버에서 직접 무효화 불가.
-        // 추후 Redis 블랙리스트 방식으로 확장 가능.
-        // 현재는 클라이언트가 토큰을 삭제하는 것으로 처리.
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        user.setRefreshToken(null);
     }
 }

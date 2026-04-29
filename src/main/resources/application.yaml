@@ -2,6 +2,11 @@ spring:
   application:
     name: beauty
 
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 50MB
+
   # ── DB 연결 ──────────────────────────────────────────
   datasource:
     url: jdbc:mysql://localhost:3306/Beauty?serverTimezone=Asia/Seoul&characterEncoding=UTF-8

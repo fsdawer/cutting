@@ -23,6 +23,7 @@ public class Portfolio {
     @Column(length = 200)
     private String caption;
 
+    @Builder.Default
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 }

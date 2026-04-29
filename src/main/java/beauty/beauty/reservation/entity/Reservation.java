@@ -6,6 +6,8 @@ import beauty.beauty.user.entity.User;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "reservations")
@@ -48,6 +50,10 @@ public class Reservation {
     @Column(name = "created_at", nullable = false, updatable = false)
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    @Builder.Default
+    @OneToMany(mappedBy = "reservation", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private List<ReservationImage> images = new ArrayList<>();
 
     public enum Status { PENDING, CONFIRMED, DONE, CANCELLED }
 }

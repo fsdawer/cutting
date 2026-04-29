@@ -49,6 +49,9 @@ public class User {
     @Column(name = "is_verified", nullable = false)
     private boolean isVerified = false;
 
+    @Column(name = "refresh_token", length = 500)
+    private String refreshToken;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

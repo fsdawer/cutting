@@ -2,12 +2,15 @@ package beauty.beauty.stylist.service;
 
 import beauty.beauty.stylist.dto.*;
 import beauty.beauty.stylist.entity.OperatingHours;
+import beauty.beauty.stylist.entity.Salon;
 import beauty.beauty.stylist.entity.StylistProfile;
 import beauty.beauty.stylist.entity.StylistServiceItem;
 import beauty.beauty.stylist.repository.OperatingHoursRepository;
 import beauty.beauty.stylist.repository.PortfolioRepository;
+import beauty.beauty.stylist.repository.SalonRepository;
 import beauty.beauty.stylist.repository.StylistProfileRepository;
 import beauty.beauty.stylist.repository.StylistServiceRepository;
+import org.springframework.transaction.annotation.Transactional;
 import beauty.beauty.user.entity.User;
 import beauty.beauty.user.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -26,6 +29,7 @@ public class StylistServiceImpl implements StylistService{
     private final OperatingHoursRepository operatingHoursRepository;
     private final PortfolioRepository portfolioRepository;
     private final UserRepository userRepository;
+    private final SalonRepository salonRepository;
 
 
     // ----- 전체 목록(스타일리스트) 조회 ------
@@ -89,31 +93,28 @@ public class StylistServiceImpl implements StylistService{
 
     // ----- 스타일리스트 프로필 업데이트 ------
     @Override
+    @Transactional
     public StylistProfileResponse updateProfile(Long userId,
                                                 UpdateStylistProfileRequest request) {
-        
-        // 1. userId로 미용사 프로필 찾기
+
         StylistProfile profile = stylistProfileRepository.findByUserId(userId)
                 .orElseThrow(() -> new EntityNotFoundException("해당 유저의 미용사 프로필을 찾을 수 없습니다."));
 
-        // 2. 요청으로 들어온 값들만(null이 아닌 경우) 업데이트
-        if (request.getSalonName() != null) {
-            profile.setSalonName(request.getSalonName());
-        }
-        if (request.getLocation() != null) {
-            profile.setLocation(request.getLocation());
-        }
-        if (request.getBio() != null) {
-            profile.setBio(request.getBio());
-        }
-        if (request.getExperience() != null) {
-            profile.setExperience(request.getExperience());
-        }
+        // 미용사 본인 정보 업데이트
+        if (request.getBio() != null) profile.setBio(request.getBio());
+        if (request.getExperience() != null) profile.setExperience(request.getExperience());
 
-        // 3. 업데이트된 프로필 저장
-        stylistProfileRepository.save(profile);
+        // 미용실 정보 업데이트 (없으면 새로 생성)
+        Salon salon = profile.getSalon();
+        if (salon == null) {
+            salon = salonRepository.save(new Salon());
+            profile.setSalon(salon);
+        }
+        if (request.getSalonName() != null) salon.setName(request.getSalonName());
+        if (request.getLocation() != null) salon.setAddress(request.getLocation());
+        if (request.getSalonPhone() != null) salon.setPhone(request.getSalonPhone());
+        if (request.getSalonDescription() != null) salon.setDescription(request.getSalonDescription());
 
-        // 4. 응답 DTO로 변환하여 반환
         return StylistProfileResponse.from(profile);
     }
 

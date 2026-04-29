@@ -27,6 +27,17 @@ public class ChatRoom {
     @JoinColumn(name = "stylist_user_id", nullable = false)
     private User stylistUser;
 
+    @Builder.Default
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    // 메시지 전송 시마다 갱신 — 채팅방 목록 최신순 정렬에 사용
+    @Builder.Default
+    @Column(name = "last_message_at", nullable = false)
+    private LocalDateTime lastMessageAt = LocalDateTime.now();
+
+    // 목록 미리보기용 최근 메시지 내용
+    @Builder.Default
+    @Column(name = "last_message_content", length = 300)
+    private String lastMessageContent = "";
 }

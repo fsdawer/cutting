@@ -1,5 +1,6 @@
 package beauty.beauty.stylist.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Getter;
 import java.time.LocalTime;
@@ -13,5 +14,6 @@ public class WorkingHoursResponse {
     private int dayOfWeek;      // 0=월, 1=화, ..., 6=일
     private LocalTime openTime;
     private LocalTime closeTime;
+    @JsonProperty("isDayOff")
     private boolean isDayOff;
 }

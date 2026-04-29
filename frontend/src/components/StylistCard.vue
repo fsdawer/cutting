@@ -1,33 +1,32 @@
 <template>
   <RouterLink :to="`/stylist/${stylist.id}`" class="stylist-card">
-    <!-- Cover -->
-    <div class="card-cover">
+    <div class="card-img-wrap">
       <img
         :src="stylist.profileImg || `https://i.pravatar.cc/200?u=${stylist.id}`"
         :alt="stylist.name"
-        class="card-avatar"
+        class="card-img"
       />
-      <div class="card-rating">
-        <span class="star">★</span>
-        <span>{{ stylist.rating?.toFixed(1) ?? '새로운' }}</span>
-      </div>
     </div>
 
-    <!-- Info -->
     <div class="card-body">
       <div class="card-top">
-        <div>
-          <h3 class="card-name">{{ stylist.name }}</h3>
-          <p class="card-salon">{{ stylist.salonName }}</p>
+        <p class="card-salon">{{ stylist.salonName }}</p>
+        <h3 class="card-name">{{ stylist.name }}</h3>
+        <p class="card-location">{{ stylist.location }}</p>
+      </div>
+
+      <div class="card-meta">
+        <div class="card-rating">
+          <span class="star">★</span>
+          <span class="rating-val">{{ stylist.rating?.toFixed(1) ?? '신규' }}</span>
+          <span class="rating-cnt" v-if="stylist.reviewCount">({{ stylist.reviewCount }})</span>
         </div>
         <span class="card-exp">경력 {{ stylist.experience }}년</span>
       </div>
 
-      <p class="card-location">📍 {{ stylist.location }}</p>
-
       <div class="card-footer">
-        <span class="review-count">리뷰 {{ stylist.reviewCount ?? 0 }}개</span>
-        <span class="book-btn">예약하기 →</span>
+        <span class="review-hint">리뷰 {{ stylist.reviewCount ?? 0 }}개</span>
+        <span class="book-cta">예약하기 →</span>
       </div>
     </div>
   </RouterLink>
@@ -39,102 +38,94 @@ defineProps({ stylist: Object })
 
 <style scoped>
 .stylist-card {
-  display: block;
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  display: flex;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
   overflow: hidden;
   transition: var(--transition);
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--shadow);
+  text-decoration: none;
 }
 .stylist-card:hover {
-  border-color: rgba(201,169,110,0.4);
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  box-shadow: var(--shadow-md);
+  border-color: #d0d0d0;
+  transform: translateY(-2px);
 }
 
-.card-cover {
-  position: relative;
-  height: 140px;
-  display: flex;
-  align-items: flex-end;
-  padding: 0 20px 0;
-  background: var(--color-bg-surface);
+.card-img-wrap {
+  width: 110px;
+  flex-shrink: 0;
+  background: var(--bg);
 }
-.card-avatar {
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
+.card-img {
+  width: 100%;
+  height: 100%;
   object-fit: cover;
-  border: 3px solid var(--color-bg-card);
-  translate: 0 36px;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  min-height: 110px;
 }
-.card-rating {
-  position: absolute;
-  top: 12px;
-  right: 16px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  background: #ffffff;
-  border-radius: var(--radius-full);
-  padding: 4px 10px;
-  font-size: 13px;
-  font-weight: 600;
-  border: 1px solid var(--color-border);
-  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-  color: #1a1a1a;
-}
-.star { color: var(--color-gold); }
 
 .card-body {
-  padding: 48px 20px 20px;
-}
-.card-top {
+  flex: 1;
+  padding: 14px 16px;
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
   justify-content: space-between;
-  margin-bottom: 10px;
-}
-.card-name {
-  font-size: 17px;
-  font-weight: 700;
-}
-.card-salon {
-  font-size: 13px;
-  color: var(--color-text-secondary);
-  margin-top: 2px;
-}
-.card-exp {
-  font-size: 12px;
-  color: var(--color-text-muted);
-  background: var(--color-bg-surface);
-  padding: 3px 8px;
-  border-radius: var(--radius-sm);
-  white-space: nowrap;
+  min-width: 0;
 }
 
+.card-top { margin-bottom: 8px; }
+.card-salon {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--primary);
+  letter-spacing: 0.02em;
+  margin-bottom: 2px;
+}
+.card-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .card-location {
-  font-size: 13px;
-  color: var(--color-text-muted);
-  margin-bottom: 16px;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.card-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.card-rating {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.star { color: #FFCC00; font-size: 13px; }
+.rating-val { font-size: 13px; font-weight: 600; }
+.rating-cnt { font-size: 12px; color: var(--text-muted); }
+.card-exp {
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--bg);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border);
 }
 
 .card-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-top: 12px;
-  border-top: 1px solid var(--color-border);
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
 }
-.review-count {
-  font-size: 12px;
-  color: var(--color-text-muted);
-}
-.book-btn {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-gold);
-}
+.review-hint { font-size: 12px; color: var(--text-muted); }
+.book-cta { font-size: 13px; font-weight: 700; color: var(--primary); }
 </style>

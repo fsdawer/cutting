@@ -29,6 +29,8 @@ public class RegisterRequest {
     private String role;        // 역할 (USER 또는 STYLIST)
 
     // STYLIST인 경우 입력받는 추가 정보
-    private String salonName;   // 미용실 이름
-    private String location;    // 근무 지역
+    private String salonName;        // 미용실 이름
+    private String location;         // 미용실 주소
+    private String salonPhone;       // 미용실 전화번호 (선택)
+    private String salonDescription; // 미용실 소개 (선택)
 }

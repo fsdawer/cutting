@@ -3,6 +3,7 @@ package beauty.beauty.stylist.entity;
 import beauty.beauty.user.entity.User;
 import jakarta.persistence.*;
 import lombok.*;
+import java.math.BigDecimal;
 
 @Entity
 @Table(name = "stylist_profiles")
@@ -17,11 +18,9 @@ public class StylistProfile {
     @JoinColumn(name = "user_id", nullable = false, unique = true)
     private User user;
 
-    @Column(name = "salon_name", length = 100)
-    private String salonName;
-
-    @Column(length = 200)
-    private String location;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "salon_id")
+    private Salon salon;
 
     @Column(columnDefinition = "TEXT")
     private String bio;
@@ -29,8 +28,8 @@ public class StylistProfile {
     @Column(nullable = false)
     private int experience = 0;
 
-    @Column(nullable = false)
-    private double rating = 0.0;
+    @Column(nullable = false, precision = 3, scale = 1)
+    private BigDecimal rating = BigDecimal.ZERO;
 
     @Column(name = "review_count", nullable = false)
     private int reviewCount = 0;

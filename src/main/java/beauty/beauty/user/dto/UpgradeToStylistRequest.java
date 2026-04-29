@@ -9,6 +9,9 @@ public class UpgradeToStylistRequest {
     @NotBlank(message = "미용실 이름은 필수입니다.")
     private String salonName;
 
-    @NotBlank(message = "근무 지역은 필수입니다.")
+    @NotBlank(message = "미용실 주소는 필수입니다.")
     private String location;
+
+    private String salonPhone;
+    private String salonDescription;
 }

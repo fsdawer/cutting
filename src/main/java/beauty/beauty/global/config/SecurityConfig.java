@@ -72,6 +72,11 @@ public class SecurityConfig {
                         // OAuth2 콜백 경로 허용
                         .requestMatchers("/login/oauth2/**", "/oauth2/**").permitAll()
 
+                        // WebSocket SockJS 핸드셰이크 허용
+                        // (SockJS는 HTTP /ws/info GET을 먼저 보내는데, 여기에 Authorization 헤더가 없어서 막힘)
+                        // 실제 메시지 수준 인증은 senderId 검증으로 대체
+                        .requestMatchers("/ws/**").permitAll()
+
                         // 나머지 모든 요청은 로그인(JWT 토큰) 필요
                         .anyRequest().authenticated()
                 )

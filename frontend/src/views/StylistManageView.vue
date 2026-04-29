@@ -36,8 +36,12 @@
                   <input v-model="profile.salonName" type="text" class="form-input" placeholder="예: D.E Studio" />
                 </div>
                 <div class="form-group">
-                  <label class="form-label">지역</label>
+                  <label class="form-label">미용실 주소</label>
                   <input v-model="profile.location" type="text" class="form-input" placeholder="예: 강남구 청담동" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">미용실 전화번호</label>
+                  <input v-model="profile.salonPhone" type="tel" class="form-input" placeholder="예: 02-1234-5678" />
                 </div>
                 <div class="form-group">
                   <label class="form-label">경력 (년)</label>
@@ -46,7 +50,11 @@
               </div>
             </div>
             <div class="form-group" style="margin-top:20px">
-              <label class="form-label">상세 소개</label>
+              <label class="form-label">미용실 소개</label>
+              <textarea v-model="profile.salonDescription" class="form-input" rows="2" placeholder="미용실을 소개해 주세요..."></textarea>
+            </div>
+            <div class="form-group" style="margin-top:12px">
+              <label class="form-label">자기 소개</label>
               <textarea v-model="profile.bio" class="form-input" rows="4" placeholder="자신을 소개해 주세요..."></textarea>
             </div>
             <p v-if="basicMsg" :class="basicSuccess ? 'success-msg' : 'error-msg'">{{ basicMsg }}</p>
@@ -145,7 +153,7 @@ const sections = [
 ]
 
 // ── 기본 정보 ────────────────────────────────────────────────
-const profile = ref({ salonName: '', location: '', experience: 0, bio: '', profileImg: '' })
+const profile = ref({ salonName: '', location: '', salonPhone: '', salonDescription: '', experience: 0, bio: '', profileImg: '' })
 const basicMsg = ref('')
 const basicSuccess = ref(false)
 const basicSaving = ref(false)
@@ -180,11 +188,13 @@ onMounted(async () => {
     const res = await stylistApi.getMyProfile()
     const data = res.data
     profile.value = {
-      salonName: data.salonName || '',
-      location: data.location || '',
-      experience: data.experience || 0,
-      bio: data.bio || '',
-      profileImg: data.profileImg || '',
+      salonName:        data.salonName        || '',
+      location:         data.location         || '',
+      salonPhone:       data.salonPhone        || '',
+      salonDescription: data.salonDescription  || '',
+      experience:       data.experience        || 0,
+      bio:              data.bio               || '',
+      profileImg:       data.profileImg        || '',
     }
     services.value = (data.services || []).map(s => ({ ...s, isNew: false }))
     portfolios.value = data.portfolios || []
@@ -209,10 +219,12 @@ async function saveBasic() {
   basicMsg.value = ''
   try {
     await stylistApi.updateProfile({
-      salonName: profile.value.salonName,
-      location: profile.value.location,
-      bio: profile.value.bio,
-      experience: Number(profile.value.experience) || 0,
+      salonName:        profile.value.salonName,
+      location:         profile.value.location,
+      salonPhone:       profile.value.salonPhone       || null,
+      salonDescription: profile.value.salonDescription || null,
+      bio:              profile.value.bio,
+      experience:       Number(profile.value.experience) || 0,
     })
     basicMsg.value = '저장되었습니다.'
     basicSuccess.value = true

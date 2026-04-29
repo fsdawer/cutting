@@ -4,12 +4,12 @@
       <div class="page-header">
         <div>
           <h1 class="section-title">예약 관리</h1>
-          <p class="section-subtitle">고객 예약 목록을 확인하고 상태를 변경하세요</p>
+          <p class="section-subtitle">고객 예약 목록을 확인하고 완료 처리하세요</p>
         </div>
-        <RouterLink to="/stylist/manage" class="btn btn-ghost">← 프로필 관리</RouterLink>
+        <RouterLink to="/stylist/manage" class="btn btn-ghost btn-sm">← 프로필 관리</RouterLink>
       </div>
 
-      <!-- Status Filter Tabs -->
+      <!-- Tabs -->
       <div class="tab-bar">
         <button
           v-for="tab in tabs"
@@ -19,62 +19,79 @@
           @click="activeTab = tab.value"
         >
           {{ tab.label }}
-          <span v-if="countByStatus(tab.value)" class="tab-count">{{ countByStatus(tab.value) }}</span>
+          <span v-if="countByTab(tab.value)" class="tab-count">{{ countByTab(tab.value) }}</span>
         </button>
       </div>
 
       <!-- Loading -->
-      <div v-if="loading" style="text-align:center;padding:80px 0">
+      <div v-if="loading" class="state-center">
         <div class="spinner"></div>
-        <p style="color:var(--color-text-muted);margin-top:16px">예약 목록을 불러오는 중...</p>
       </div>
 
-      <!-- Reservation List -->
-      <div v-else class="reservation-list">
-        <div
-          v-for="r in filteredReservations"
-          :key="r.id"
-          class="card reservation-card"
-        >
-          <div class="rc-main">
-            <div class="rc-left">
+      <!-- List -->
+      <div v-else class="res-list">
+        <div v-for="r in filteredReservations" :key="r.id" class="card res-card">
+          <!-- 상단: 상태 + 서비스 + 날짜 + 금액 -->
+          <div class="rc-top">
+            <div class="rc-top-left">
               <div class="rc-meta">
                 <span class="badge" :class="statusBadge(r.status)">{{ statusLabel(r.status) }}</span>
                 <span class="rc-id">#{{ r.id }}</span>
               </div>
               <h3 class="rc-service">{{ r.serviceName }}</h3>
               <p class="rc-date">📅 {{ formatDate(r.reservedAt) }}</p>
-              <p class="rc-price">💰 {{ r.totalPrice?.toLocaleString() }}원</p>
+              <p class="rc-price">{{ r.totalPrice?.toLocaleString() }}원</p>
             </div>
-            <div class="rc-right">
-              <div class="rc-actions" v-if="r.status === 'CONFIRMED'">
-                <button class="btn btn-primary btn-sm" @click="updateStatus(r.id, 'DONE')">
-                  완료 처리
-                </button>
-                <RouterLink v-if="r.chatRoomId" :to="`/chat/${r.chatRoomId}`" class="btn btn-ghost btn-sm">
-                  채팅
-                </RouterLink>
-              </div>
-              <div class="rc-actions" v-else-if="r.status === 'PENDING'">
-                <button class="btn btn-primary btn-sm" @click="updateStatus(r.id, 'CONFIRMED')">
-                  ✓ 승인
-                </button>
-                <button class="btn btn-ghost btn-sm danger" @click="updateStatus(r.id, 'CANCELLED')">
-                  ✕ 거절
-                </button>
-              </div>
+            <div class="rc-actions">
+              <button
+                v-if="r.status === 'PENDING' || r.status === 'CONFIRMED'"
+                class="btn btn-primary btn-sm"
+                @click="updateStatus(r.id, 'DONE')"
+              >완료 처리</button>
+              <button
+                v-if="r.status === 'PENDING' || r.status === 'CONFIRMED'"
+                class="btn btn-ghost btn-sm danger"
+                @click="updateStatus(r.id, 'CANCELLED')"
+              >취소</button>
+              <RouterLink v-if="r.chatRoomId" :to="`/chat/${r.chatRoomId}`" class="btn btn-ghost btn-sm">
+                채팅
+              </RouterLink>
             </div>
           </div>
 
-          <!-- Memo -->
+          <!-- 고객 정보 -->
+          <div class="rc-customer">
+            <span class="rc-customer-label">고객</span>
+            <span class="rc-customer-name">{{ r.userName }}</span>
+            <span v-if="r.userPhone" class="rc-customer-phone">{{ r.userPhone }}</span>
+          </div>
+
+          <!-- 요구사항 -->
           <div v-if="r.requestMemo" class="rc-memo">
-            💬 {{ r.requestMemo }}
+            <span class="rc-memo-label">💬 요구사항</span>
+            <p class="rc-memo-text">{{ r.requestMemo }}</p>
+          </div>
+
+          <!-- 첨부 이미지 -->
+          <div v-if="r.imageUrls && r.imageUrls.length" class="rc-images">
+            <span class="rc-images-label">📎 첨부 이미지</span>
+            <div class="rc-image-grid">
+              <a
+                v-for="(url, idx) in r.imageUrls"
+                :key="idx"
+                :href="url"
+                target="_blank"
+                class="rc-image-link"
+              >
+                <img :src="url" class="rc-image-thumb" :alt="`첨부이미지 ${idx+1}`" />
+              </a>
+            </div>
           </div>
         </div>
 
-        <div v-if="filteredReservations.length === 0" class="empty-state">
-          <div class="empty-icon">📋</div>
-          <p class="empty-text">{{ activeTab === 'all' ? '예약 내역이 없습니다' : '해당 상태의 예약이 없습니다' }}</p>
+        <div v-if="filteredReservations.length === 0" class="state-center">
+          <p class="state-icon">📋</p>
+          <p class="state-text">해당 상태의 예약이 없습니다</p>
         </div>
       </div>
     </div>
@@ -85,39 +102,41 @@
 import { ref, computed, onMounted } from 'vue'
 import { reservationApi } from '@/api/reservation'
 
-const loading = ref(false)
+const loading      = ref(false)
 const reservations = ref([])
-const activeTab = ref('all')
+const activeTab    = ref('active')
 
 const tabs = [
-  { label: '전체', value: 'all' },
-  { label: '대기중', value: 'PENDING' },
-  { label: '확정', value: 'CONFIRMED' },
-  { label: '완료', value: 'DONE' },
-  { label: '취소', value: 'CANCELLED' },
+  { label: '전체',   value: 'all' },
+  { label: '대기중', value: 'active' },
+  { label: '완료',   value: 'DONE' },
+  { label: '취소',   value: 'CANCELLED' },
 ]
 
 const filteredReservations = computed(() => {
-  if (activeTab.value === 'all') return reservations.value
+  if (activeTab.value === 'all')    return reservations.value
+  if (activeTab.value === 'active') return reservations.value.filter(r => r.status === 'PENDING' || r.status === 'CONFIRMED')
   return reservations.value.filter(r => r.status === activeTab.value)
 })
 
-function countByStatus(status) {
-  if (status === 'all') return null
-  const cnt = reservations.value.filter(r => r.status === status).length
-  return cnt > 0 ? cnt : null
+function countByTab(tabValue) {
+  if (tabValue === 'all') return null
+  const list = tabValue === 'active'
+    ? reservations.value.filter(r => r.status === 'PENDING' || r.status === 'CONFIRMED')
+    : reservations.value.filter(r => r.status === tabValue)
+  return list.length > 0 ? list.length : null
 }
 
 function statusLabel(s) {
-  return { PENDING: '대기중', CONFIRMED: '예약확정', DONE: '완료', CANCELLED: '취소됨' }[s] || s
+  return { PENDING: '대기중', CONFIRMED: '대기중', DONE: '완료', CANCELLED: '취소됨' }[s] || s
 }
 function statusBadge(s) {
-  return { PENDING: 'badge-gold', CONFIRMED: 'badge-green', DONE: 'badge-gray', CANCELLED: 'badge-red' }[s] || ''
+  return { PENDING: 'badge-gold', CONFIRMED: 'badge-gold', DONE: 'badge-gray', CANCELLED: 'badge-red' }[s] || ''
 }
 function formatDate(str) {
   if (!str) return ''
   const d = new Date(str)
-  return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')} · ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+  return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
 }
 
 async function loadReservations() {
@@ -133,7 +152,7 @@ async function loadReservations() {
 }
 
 async function updateStatus(id, status) {
-  const msgMap = { CONFIRMED: '승인', CANCELLED: '거절', DONE: '완료 처리' }
+  const msgMap = { DONE: '완료 처리', CANCELLED: '취소' }
   if (!confirm(`예약을 ${msgMap[status]}하시겠습니까?`)) return
   try {
     await reservationApi.updateStatus(id, status)
@@ -151,57 +170,100 @@ onMounted(() => loadReservations())
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 28px;
+  margin-bottom: 24px;
   gap: 16px;
 }
 
-.tab-bar { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--color-border); flex-wrap: wrap; }
-.tab-btn {
-  padding: 10px 18px; background: none; border: none;
-  font-size: 14px; font-weight: 500; color: var(--color-text-muted);
-  cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
-  transition: var(--transition); display: flex; align-items: center; gap: 6px;
+/* Tabs */
+.tab-bar {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 20px;
+  flex-wrap: wrap;
 }
-.tab-btn:hover { color: var(--color-text-primary); }
-.tab-btn.active { color: var(--color-gold); border-bottom-color: var(--color-gold); }
+.tab-btn {
+  padding: 10px 18px;
+  background: none; border: none;
+  font-size: 14px; font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: var(--transition);
+  display: flex; align-items: center; gap: 6px;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 700; }
 .tab-count {
-  background: var(--color-gold); color: #1a1206;
+  background: var(--primary); color: #fff;
   font-size: 11px; font-weight: 700;
   padding: 2px 6px; border-radius: var(--radius-full);
   min-width: 18px; text-align: center;
 }
 
-.reservation-list { display: flex; flex-direction: column; gap: 16px; }
-.reservation-card { padding: 20px; }
-.rc-main { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
-.rc-left { flex: 1; }
-.rc-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-.rc-id { font-size: 12px; color: var(--color-text-muted); }
-.rc-service { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
-.rc-date { font-size: 13px; color: var(--color-text-secondary); margin-bottom: 4px; }
-.rc-price { font-size: 14px; font-weight: 600; color: var(--color-gold); }
+/* Cards */
+.res-list { display: flex; flex-direction: column; gap: 14px; }
+.res-card  { padding: 20px; }
 
-.rc-right { display: flex; align-items: center; }
-.rc-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.danger { color: var(--color-danger) !important; border-color: var(--color-danger) !important; }
-
-.rc-memo {
-  margin-top: 14px;
-  padding: 10px 14px;
-  background: var(--color-bg-surface);
-  border-radius: var(--radius-md);
-  font-size: 13px;
-  color: var(--color-text-secondary);
-  border-left: 3px solid var(--color-gold);
+.rc-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
 }
+.rc-top-left { flex: 1; }
+.rc-meta     { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.rc-id       { font-size: 12px; color: var(--text-muted); }
+.rc-service  { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+.rc-date     { font-size: 13px; color: var(--text-sub); margin-bottom: 3px; }
+.rc-price    { font-size: 14px; font-weight: 600; color: var(--primary); }
 
-.empty-state { text-align: center; padding: 60px 0; }
-.empty-icon { font-size: 40px; margin-bottom: 12px; }
-.empty-text { color: var(--color-text-secondary); }
+.rc-actions { display: flex; gap: 8px; flex-wrap: wrap; flex-shrink: 0; }
+.danger { color: var(--red) !important; border-color: var(--red) !important; }
+
+/* Customer */
+.rc-customer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  margin-bottom: 10px;
+}
+.rc-customer-label { font-size: 12px; color: var(--text-muted); font-weight: 600; }
+.rc-customer-name  { font-size: 14px; font-weight: 600; }
+.rc-customer-phone { font-size: 13px; color: var(--text-sub); }
+
+/* Memo */
+.rc-memo {
+  padding: 10px 14px;
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--primary);
+  margin-bottom: 10px;
+}
+.rc-memo-label { font-size: 12px; font-weight: 600; color: var(--primary); display: block; margin-bottom: 4px; }
+.rc-memo-text  { font-size: 13px; color: var(--text-sub); line-height: 1.6; }
+
+/* Images */
+.rc-images { margin-top: 4px; }
+.rc-images-label { font-size: 12px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 8px; }
+.rc-image-grid  { display: flex; flex-wrap: wrap; gap: 8px; }
+.rc-image-link  { display: block; border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--border); }
+.rc-image-thumb { width: 80px; height: 80px; object-fit: cover; display: block; transition: var(--transition); }
+.rc-image-thumb:hover { opacity: 0.85; }
+
+/* States */
+.state-center { text-align: center; padding: 80px 0; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.state-icon   { font-size: 40px; }
+.state-text   { color: var(--text-sub); font-size: 15px; }
 
 @media (max-width: 768px) {
   .page-header { flex-direction: column; }
-  .rc-main { flex-direction: column; }
-  .rc-actions { flex-wrap: wrap; }
+  .rc-top      { flex-direction: column; }
+  .rc-actions  { flex-direction: row; }
 }
 </style>

@@ -1,161 +1,132 @@
 <template>
   <main class="page">
     <div class="container">
-      <div v-if="loading" style="text-align:center;padding:80px 0">
+      <div v-if="loading" class="state-center">
         <div class="spinner"></div>
-        <p style="color:var(--color-text-muted);margin-top:16px">결제 정보를 불러오는 중...</p>
+        <p class="state-text">결제 정보를 불러오는 중...</p>
       </div>
 
       <div v-else class="pay-layout">
-        <!-- 좌측: 예약 정보 + 토스 위젯 -->
+        <!-- 좌측: 예약 정보 + 결제 수단 -->
         <div class="pay-main">
-          <h1 class="section-title">결제</h1>
-          <p class="section-subtitle">예약 정보를 확인하고 결제를 진행하세요</p>
+          <div class="page-header">
+            <button class="back-btn" @click="$router.back()">← 뒤로가기</button>
+            <h1 class="section-title">결제</h1>
+          </div>
 
-          <!-- 예약 내역 카드 -->
-          <div class="card pay-card">
-            <h2 class="pay-section-title">📋 예약 내역</h2>
-            <div class="pay-stylist">
+          <!-- 예약 정보 -->
+          <div class="card info-card">
+            <h2 class="card-title">예약 내역</h2>
+            <div class="res-info">
               <img
-                :src="reservation.stylistProfileImg || `https://i.pravatar.cc/60?u=${reservation.stylistId}`"
-                class="pay-avatar"
+                :src="reservation.stylistProfileImg || `https://i.pravatar.cc/80?u=${reservation.stylistId}`"
+                class="res-avatar"
               />
-              <div class="pay-info">
-                <p class="pay-name">{{ reservation.stylistName }} · {{ reservation.salonName }}</p>
-                <p class="pay-detail">📅 {{ formatDate(reservation.reservedAt) }}</p>
-                <p class="pay-detail">💇 {{ reservation.serviceName }}</p>
+              <div class="res-detail">
+                <p class="res-name">{{ reservation.stylistName }} · {{ reservation.salonName }}</p>
+                <p class="res-meta">📅 {{ formatDate(reservation.reservedAt) }}</p>
+                <p class="res-meta">💇 {{ reservation.serviceName }}</p>
               </div>
             </div>
           </div>
 
-          <!-- 토스 결제 위젯 영역 -->
-          <div class="card pay-card" v-if="orderId">
-            <h2 class="pay-section-title">💳 결제 수단</h2>
-            <div id="payment-widget" class="toss-widget-area"></div>
-            <div id="agreement-widget" class="toss-agreement-area"></div>
-          </div>
-
-          <!-- SDK 없을 때 개발용 결제 수단 선택 -->
-          <div class="card pay-card" v-if="!tossReady && !orderId">
-            <h2 class="pay-section-title">💳 결제 수단 선택</h2>
-            <div class="pay-methods">
+          <!-- 결제 수단 -->
+          <div class="card method-card">
+            <h2 class="card-title">결제 수단</h2>
+            <div class="method-grid">
               <button
-                v-for="m in methods"
-                :key="m.id"
-                class="pay-method"
-                :class="{ selected: selectedMethod === m.id }"
-                @click="selectedMethod = m.id"
+                v-for="m in payMethods"
+                :key="m.value"
+                class="method-btn"
+                :class="{ selected: payMethod === m.value }"
+                @click="payMethod = m.value"
               >
-                <span class="pm-icon">{{ m.icon }}</span>
-                <span class="pm-name">{{ m.name }}</span>
+                <span class="method-icon">{{ m.icon }}</span>
+                <span>{{ m.label }}</span>
               </button>
             </div>
           </div>
         </div>
 
-        <!-- 우측 사이드바: 요약 + 결제하기 버튼 -->
+        <!-- 우측: 결제 요약 -->
         <aside class="pay-sidebar">
-          <div class="card" style="position:sticky;top:88px;">
-            <h2 class="pay-section-title">🧾 결제 요약</h2>
-            <div class="pay-summary-rows">
-              <div class="ps-row">
+          <div class="card summary-card">
+            <h2 class="card-title">결제 요약</h2>
+            <div class="summary-rows">
+              <div class="sr-row">
                 <span>서비스</span>
                 <span>{{ reservation.serviceName }}</span>
               </div>
-              <div class="ps-row">
+              <div class="sr-row">
                 <span>기본 요금</span>
                 <span>{{ reservation.totalPrice?.toLocaleString() }}원</span>
               </div>
-              <div class="ps-row ps-total">
+              <div class="sr-row total">
                 <span>최종 결제액</span>
-                <span class="ps-amount">{{ reservation.totalPrice?.toLocaleString() }}원</span>
+                <span class="total-price">{{ reservation.totalPrice?.toLocaleString() }}원</span>
               </div>
             </div>
 
-            <!-- 결제하기 버튼 -->
+            <p v-if="payError" class="msg-error">{{ payError }}</p>
+
             <button
               class="btn btn-primary btn-full btn-lg"
               @click="handlePayment"
-              :disabled="paying || (!tossReady && loading)"
-              id="pay-btn"
+              :disabled="paying"
+              style="margin-top: 16px;"
             >
               <span v-if="paying" class="spinner" style="width:18px;height:18px;border-width:2px;"></span>
-              <span v-else>결제하기</span>
+              <span v-else>{{ reservation.totalPrice?.toLocaleString() }}원 결제하기</span>
             </button>
 
-            <p v-if="payError" class="pay-error">{{ payError }}</p>
-            <p class="pay-notice">결제 완료 후 마이페이지에서 예약을 확인하세요</p>
-
-            <!-- 보안 배지 -->
-            <div class="pay-secure">
+            <div class="secure-badge">
               <span>🔒</span>
               <span>토스페이먼츠 보안 결제</span>
             </div>
           </div>
         </aside>
       </div>
-
-      <!-- 성공 모달 -->
-      <Transition name="fade">
-        <div v-if="showSuccess" class="modal-overlay" @click.self="goToMyPage">
-          <div class="modal-box card">
-            <div class="modal-icon">🎉</div>
-            <h2 class="modal-title">결제가 완료되었습니다!</h2>
-            <p class="modal-desc">마이페이지에서 예약 내역을 확인하세요.</p>
-            <button class="btn btn-primary btn-lg" @click="goToMyPage">마이페이지로 이동</button>
-          </div>
-        </div>
-      </Transition>
     </div>
   </main>
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { reservationApi } from '@/api/reservation'
 import { paymentApi } from '@/api/payment'
+import { useAuthStore } from '@/stores/authStore'
 
-const route = useRoute()
-const router = useRouter()
+const route         = useRoute()
+const router        = useRouter()
+const authStore     = useAuthStore()
 const reservationId = route.params.reservationId
 
-const loading = ref(true)
+const loading   = ref(true)
 const reservation = ref({})
-const selectedMethod = ref('card')
-const paying = ref(false)
-const payError = ref('')
-const showSuccess = ref(false)
-const orderId = ref('')       // prepare 후 발급된 orderId
-const tossReady = ref(false)  // 토스 SDK 로드 여부
-let tossPaymentsInstance = null
-let paymentWidgetInstance = null
+const paying    = ref(false)
+const payError  = ref('')
+const orderId   = ref('')
 
-const methods = [
-  { id: 'card', icon: '💳', name: '신용/체크카드' },
-  { id: 'kakao', icon: '💬', name: '카카오페이' },
-  { id: 'naver', icon: '🅝', name: '네이버페이' },
-  { id: 'toss', icon: '💸', name: '토스페이' },
+const payMethod  = ref('카드')
+const payMethods = [
+  { value: '카드',    label: '신용/체크카드', icon: '💳' },
+  { value: '토스페이', label: '토스페이',     icon: '💸' },
+  { value: '계좌이체', label: '계좌이체',     icon: '🏦' },
 ]
 
-function formatDate(dateStr) {
-  if (!dateStr) return ''
-  const d = new Date(dateStr)
-  const yy = d.getFullYear()
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const dd = String(d.getDate()).padStart(2, '0')
-  const hh = String(d.getHours()).padStart(2, '0')
-  const min = String(d.getMinutes()).padStart(2, '0')
-  return `${yy}.${mm}.${dd} · ${hh}:${min}`
+function formatDate(str) {
+  if (!str) return ''
+  const d = new Date(str)
+  return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')} · ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
 }
 
-/** 토스 SDK 스크립트 동적 로드 */
 function loadTossScript() {
   return new Promise((resolve) => {
     if (window.TossPayments) { resolve(true); return }
     const script = document.createElement('script')
-    script.src = 'https://js.tosspayments.com/v2/standard'
-    script.onload = () => resolve(true)
+    script.src = 'https://js.tosspayments.com/v1/payment'
+    script.onload  = () => resolve(true)
     script.onerror = () => resolve(false)
     document.head.appendChild(script)
   })
@@ -165,166 +136,119 @@ onMounted(async () => {
   try {
     const res = await reservationApi.getById(reservationId)
     reservation.value = res.data
+
+    const prepareRes = await paymentApi.prepare(Number(reservationId))
+    orderId.value = prepareRes.data.orderId
   } catch (e) {
-    console.error('예약 정보 로드 실패', e)
+    console.error('결제 준비 실패', e)
+    payError.value = '결제 초기화에 실패했습니다.'
   } finally {
     loading.value = false
   }
-
-  // 토스 SDK 로드 시도
-  const loaded = await loadTossScript()
-  if (loaded && window.TossPayments) {
-    tossReady.value = true
-  }
-
-  // 바로 결제 준비 (prepare) 후 위젯 렌더링
-  if (reservation.value && reservation.value.id) {
-    try {
-      const prepareRes = await paymentApi.prepare(Number(reservationId))
-      orderId.value = prepareRes.data.orderId
-      const amount = prepareRes.data.amount
-
-      if (tossReady.value && window.TossPayments) {
-        await nextTick()
-        await initTossWidget(orderId.value, amount)
-      }
-    } catch (e) {
-      console.error('결제 준비 실패', e)
-      payError.value = '결제 초기화에 실패했습니다.'
-    }
-  }
+  await loadTossScript()
 })
 
-/** 결제하기 버튼 클릭 */
 async function handlePayment() {
-  paying.value = true
+  if (!orderId.value) { payError.value = '주문 정보가 없습니다.'; return }
+  paying.value  = true
   payError.value = ''
-
   try {
-    // 위젯이 정상 로드 되어 있을 때 SDK의 requestPayment() 호출
-    if (paymentWidgetInstance) {
-      await paymentWidgetInstance.requestPayment({
-        orderId: orderId.value,
-        orderName: reservation.value.serviceName,
-        successUrl: `${window.location.origin}/payment/success`,
-        failUrl: `${window.location.origin}/payment/fail`,
-      })
-      // 리다이렉트 발생
+    if (!window.TossPayments) {
+      payError.value = '결제 모듈을 불러오지 못했습니다.'
       return
     }
-
-    // SDK 없을 때 mock confirm (개발/테스트용)
-    if (orderId.value) {
-      await paymentApi.confirm({
-        paymentKey: `mock_${Date.now()}`,
-        orderId: orderId.value,
-        amount: reservation.value.totalPrice,
-      })
-      showSuccess.value = true
-    }
+    const toss = window.TossPayments(import.meta.env.VITE_TOSS_CLIENT_KEY || 'test_ck_placeholder')
+    await toss.requestPayment(payMethod.value, {
+      amount:       reservation.value.totalPrice,
+      orderId:      orderId.value,
+      orderName:    reservation.value.serviceName,
+      customerName: authStore.user?.name || '고객',
+      successUrl:   `${window.location.origin}/payment/success`,
+      failUrl:      `${window.location.origin}/payment/fail`,
+    })
+    // 리다이렉트 발생
   } catch (e) {
-    payError.value = e.response?.data?.message || e.message || '결제 중 오류가 발생했습니다.'
+    if (e.code === 'USER_CANCEL') {
+      payError.value = '결제가 취소되었습니다.'
+    } else {
+      payError.value = e.response?.data?.message || e.message || '결제 중 오류가 발생했습니다.'
+    }
   } finally {
     paying.value = false
   }
 }
-
-/** 토스 위젯 초기화 및 DOM에 렌더링 */
-async function initTossWidget(orderIdVal, amount) {
-  const clientKey = import.meta.env.VITE_TOSS_CLIENT_KEY || 'test_ck_placeholder'
-  tossPaymentsInstance = window.TossPayments(clientKey)
-  paymentWidgetInstance = tossPaymentsInstance.widgets({ customerKey: 'ANONYMOUS' })
-
-  await paymentWidgetInstance.setAmount({
-    currency: 'KRW',
-    value: amount,
-  })
-
-  await Promise.all([
-    paymentWidgetInstance.renderPaymentMethods({
-      selector: '#payment-widget',
-      variantKey: 'DEFAULT',
-    }),
-    paymentWidgetInstance.renderAgreement({
-      selector: '#agreement-widget',
-      variantKey: 'AGREEMENT',
-    }),
-  ])
-}
-
-function goToMyPage() {
-  router.push('/mypage')
-}
 </script>
 
 <style scoped>
+.page-header { margin-bottom: 20px; }
+.back-btn {
+  background: none; border: none;
+  color: var(--text-sub); font-size: 14px;
+  cursor: pointer; padding: 6px 0;
+  margin-bottom: 10px; display: block;
+  transition: var(--transition);
+}
+.back-btn:hover { color: var(--primary); }
+
 .pay-layout {
   display: grid;
-  grid-template-columns: 1fr 340px;
-  gap: 24px;
+  grid-template-columns: 1fr 320px;
+  gap: 20px;
   align-items: start;
 }
-.pay-card { margin-bottom: 20px; }
-.pay-section-title {
-  font-size: 16px; font-weight: 600; margin-bottom: 16px;
-  display: flex; align-items: center; gap: 8px;
+
+.card-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
 }
 
-/* 예약 정보 */
-.pay-stylist { display: flex; gap: 14px; align-items: center; }
-.pay-avatar { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(201,169,110,0.3); }
-.pay-info { display: flex; flex-direction: column; gap: 4px; }
-.pay-name { font-size: 15px; font-weight: 600; }
-.pay-detail { font-size: 13px; color: var(--color-text-secondary); }
+.info-card, .method-card { margin-bottom: 16px; }
 
-/* 토스 위젯 영역 */
-.toss-widget-area { min-height: 200px; }
-.toss-agreement-area { margin-top: 12px; }
+.res-info { display: flex; gap: 14px; align-items: center; }
+.res-avatar { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; flex-shrink: 0; border: 2px solid var(--border); }
+.res-detail { display: flex; flex-direction: column; gap: 4px; }
+.res-name { font-size: 15px; font-weight: 600; }
+.res-meta { font-size: 13px; color: var(--text-sub); }
 
-/* 결제 수단 선택 (SDK 없을 때) */
-.pay-methods { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-.pay-method {
-  display: flex; align-items: center; gap: 10px;
-  padding: 14px 16px; border-radius: var(--radius-md);
-  border: 1.5px solid var(--color-border); background: transparent;
+.method-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.method-btn {
+  display: flex; flex-direction: column;
+  align-items: center; gap: 6px;
+  padding: 14px 8px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  background: #fff;
+  font-size: 12px; font-weight: 500; color: var(--text-sub);
   cursor: pointer; transition: var(--transition);
 }
-.pay-method:hover { border-color: rgba(201,169,110,0.4); }
-.pay-method.selected { border-color: var(--color-gold); background: rgba(201,169,110,0.08); }
-.pm-icon { font-size: 20px; }
-.pm-name { font-size: 14px; font-weight: 500; color: var(--color-text-primary); }
+.method-btn:hover { border-color: var(--primary); color: var(--primary); }
+.method-btn.selected { border-color: var(--primary); background: var(--primary-light); color: var(--primary); font-weight: 600; }
+.method-icon { font-size: 22px; }
 
-/* 사이드바 요약 */
-.pay-summary-rows { display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }
-.ps-row { display: flex; justify-content: space-between; font-size: 14px; color: var(--color-text-secondary); }
-.ps-total { padding-top: 12px; border-top: 1px solid var(--color-border); color: var(--color-text-primary); font-weight: 600; }
-.ps-amount { color: var(--color-gold); font-size: 18px; }
+/* Summary */
+.summary-card { position: sticky; top: calc(var(--navbar-h) + 16px); }
+.summary-rows { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+.sr-row { display: flex; justify-content: space-between; font-size: 14px; color: var(--text-sub); }
+.sr-row.total { padding-top: 12px; border-top: 1px solid var(--border); color: var(--text); font-weight: 600; }
+.total-price { font-size: 20px; font-weight: 700; color: var(--primary); }
 
-.pay-notice { text-align: center; font-size: 12px; color: var(--color-text-muted); margin-top: 12px; }
-.pay-error { color: var(--color-danger, #e74c3c); font-size: 13px; text-align: center; margin-top: 10px; }
+.msg-error { color: var(--red); font-size: 13px; margin-top: 8px; }
 
-.pay-secure {
+.secure-badge {
   display: flex; align-items: center; justify-content: center; gap: 6px;
-  margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--color-border);
-  font-size: 12px; color: var(--color-text-muted);
+  margin-top: 14px; padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 12px; color: var(--text-muted);
 }
 
-/* 성공 모달 */
-.modal-overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.75);
-  display: flex; align-items: center; justify-content: center; z-index: 999;
-  backdrop-filter: blur(6px);
-}
-.modal-box { text-align: center; padding: 48px 40px; max-width: 380px; width: 90%; }
-.modal-icon { font-size: 52px; margin-bottom: 16px; }
-.modal-title { font-size: 22px; font-weight: 700; margin-bottom: 10px; }
-.modal-desc { color: var(--color-text-secondary); font-size: 14px; margin-bottom: 24px; line-height: 1.7; }
-
-.fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
+.state-center { text-align: center; padding: 80px 0; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.state-text { color: var(--text-sub); }
 
 @media (max-width: 768px) {
   .pay-layout { grid-template-columns: 1fr; }
-  .pay-methods { grid-template-columns: 1fr 1fr; }
+  .method-grid { grid-template-columns: repeat(2, 1fr); }
 }
 </style>

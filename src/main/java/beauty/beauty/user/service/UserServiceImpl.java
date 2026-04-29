@@ -7,7 +7,9 @@ import beauty.beauty.user.dto.UserResponse;
 import beauty.beauty.user.entity.User;
 import beauty.beauty.user.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
+import beauty.beauty.stylist.entity.Salon;
 import beauty.beauty.stylist.entity.StylistProfile;
+import beauty.beauty.stylist.repository.SalonRepository;
 import beauty.beauty.stylist.repository.StylistProfileRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -20,6 +22,7 @@ public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
     private final StylistProfileRepository stylistProfileRepository;
+    private final SalonRepository salonRepository;
     private final PasswordEncoder passwordEncoder;
 
 
@@ -95,13 +98,17 @@ public class UserServiceImpl implements UserService {
         // 1. 권한 변경
         user.setRole(User.Role.STYLIST);
 
-        // 2. 미용사 프로필 생성
-        StylistProfile profile = StylistProfile.builder()
+        // 2. 미용실 생성 후 미용사 프로필 생성
+        Salon salon = salonRepository.save(Salon.builder()
+                .name(request.getSalonName())
+                .address(request.getLocation())
+                .phone(request.getSalonPhone())
+                .description(request.getSalonDescription())
+                .build());
+        stylistProfileRepository.save(StylistProfile.builder()
                 .user(user)
-                .salonName(request.getSalonName())
-                .location(request.getLocation())
-                .build();
-        stylistProfileRepository.save(profile);
+                .salon(salon)
+                .build());
 
         return UserResponse.from(user);
     }

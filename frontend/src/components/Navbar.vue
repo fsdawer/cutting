@@ -1,57 +1,52 @@
 <template>
   <nav class="navbar">
     <div class="container nav-inner">
-      <!-- Logo -->
       <RouterLink to="/" class="nav-logo">
-        <span class="logo-icon">✂</span>
-        <span class="logo-text">BeautyBook</span>
+        <span class="logo-mark">✂</span>
+        <span class="logo-text">CutIng</span>
       </RouterLink>
 
-      <!-- Desktop Nav Links -->
       <ul class="nav-links">
         <li><RouterLink to="/" class="nav-link">홈</RouterLink></li>
         <li v-if="auth.isStylist">
           <RouterLink to="/stylist/reservations" class="nav-link">예약 관리</RouterLink>
         </li>
         <li v-if="auth.isStylist">
-          <RouterLink to="/stylist/manage" class="nav-link">내 프로필 관리</RouterLink>
+          <RouterLink to="/stylist/manage" class="nav-link">프로필 관리</RouterLink>
         </li>
         <li v-if="auth.isLoggedIn">
           <RouterLink to="/mypage" class="nav-link">마이페이지</RouterLink>
         </li>
       </ul>
 
-      <!-- Auth Buttons -->
       <div class="nav-actions">
         <template v-if="!auth.isLoggedIn">
           <RouterLink to="/login" class="btn btn-ghost btn-sm">로그인</RouterLink>
           <RouterLink to="/register" class="btn btn-primary btn-sm">회원가입</RouterLink>
         </template>
         <template v-else>
-          <span class="nav-username">{{ auth.user?.name }}</span>
+          <span class="nav-user">{{ auth.user?.name }}</span>
           <button class="btn btn-ghost btn-sm" @click="handleLogout">로그아웃</button>
         </template>
 
-        <!-- Mobile Menu Toggle -->
-        <button class="hamburger" @click="mobileOpen = !mobileOpen">
-          <span :class="{ active: mobileOpen }"></span>
+        <button class="hamburger" @click="mobileOpen = !mobileOpen" aria-label="메뉴">
+          <span :class="{ open: mobileOpen }"></span>
         </button>
       </div>
     </div>
 
-    <!-- Mobile Drawer -->
-    <Transition name="slide-down">
-      <div v-if="mobileOpen" class="mobile-menu">
-        <RouterLink to="/" @click="mobileOpen=false">홈</RouterLink>
-        <RouterLink v-if="auth.isStylist" to="/stylist/reservations" @click="mobileOpen=false">예약 관리</RouterLink>
-        <RouterLink v-if="auth.isStylist" to="/stylist/manage" @click="mobileOpen=false">내 프로필 관리</RouterLink>
-        <RouterLink v-if="auth.isLoggedIn" to="/mypage" @click="mobileOpen=false">마이페이지</RouterLink>
+    <Transition name="drawer">
+      <div v-if="mobileOpen" class="mobile-drawer">
+        <RouterLink to="/" class="drawer-item" @click="mobileOpen = false">홈</RouterLink>
+        <RouterLink v-if="auth.isStylist" to="/stylist/reservations" class="drawer-item" @click="mobileOpen = false">예약 관리</RouterLink>
+        <RouterLink v-if="auth.isStylist" to="/stylist/manage" class="drawer-item" @click="mobileOpen = false">프로필 관리</RouterLink>
+        <RouterLink v-if="auth.isLoggedIn" to="/mypage" class="drawer-item" @click="mobileOpen = false">마이페이지</RouterLink>
         <template v-if="!auth.isLoggedIn">
-          <RouterLink to="/login" @click="mobileOpen=false">로그인</RouterLink>
-          <RouterLink to="/register" @click="mobileOpen=false">회원가입</RouterLink>
+          <RouterLink to="/login" class="drawer-item" @click="mobileOpen = false">로그인</RouterLink>
+          <RouterLink to="/register" class="drawer-item drawer-item--primary" @click="mobileOpen = false">회원가입</RouterLink>
         </template>
         <template v-else>
-          <button @click="handleLogout">로그아웃</button>
+          <button class="drawer-item drawer-item--danger" @click="handleLogout">로그아웃</button>
         </template>
       </div>
     </Transition>
@@ -78,134 +73,149 @@ async function handleLogout() {
 .navbar {
   position: sticky;
   top: 0;
-  z-index: 100;
-  height: 68px;
-  background: #ffffff;
-  border-bottom: 1px solid var(--color-border);
+  z-index: 200;
+  height: var(--navbar-h);
+  background: #fff;
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 1px 0 rgba(0,0,0,0.04);
 }
 
 .nav-inner {
-  height: 68px;
+  height: var(--navbar-h);
   display: flex;
   align-items: center;
-  gap: 32px;
+  gap: 24px;
 }
 
 .nav-logo {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-weight: 700;
-  font-size: 20px;
-  color: var(--color-gold);
-  letter-spacing: -0.5px;
+  gap: 8px;
   flex-shrink: 0;
+  text-decoration: none;
 }
-.logo-icon { font-size: 22px; }
+.logo-mark {
+  font-size: 20px;
+  color: var(--primary);
+  line-height: 1;
+}
+.logo-text {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.5px;
+}
 
 .nav-links {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   list-style: none;
   flex: 1;
 }
-
 .nav-link {
-  padding: 8px 16px;
+  padding: 7px 14px;
   border-radius: var(--radius-sm);
   font-size: 14px;
   font-weight: 500;
-  color: var(--color-text-secondary);
+  color: var(--text-sub);
   transition: var(--transition);
 }
-.nav-link:hover, .nav-link.router-link-active {
-  color: var(--color-text-primary);
-  background: rgba(255,255,255,0.06);
-}
-.nav-link.router-link-exact-active { color: var(--color-gold); }
+.nav-link:hover { color: var(--text); background: var(--bg); }
+.nav-link.router-link-exact-active { color: var(--primary); font-weight: 600; }
 
 .nav-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-shrink: 0;
 }
-
-.nav-username {
+.nav-user {
   font-size: 14px;
-  font-weight: 500;
-  color: var(--color-gold);
+  font-weight: 600;
+  color: var(--text);
 }
 
 /* Hamburger */
 .hamburger {
   display: none;
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   background: transparent;
-  border: 1.5px solid var(--color-border);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  position: relative;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0;
 }
 .hamburger span,
 .hamburger span::before,
 .hamburger span::after {
-  position: absolute;
-  left: 8px;
-  width: 18px;
+  display: block;
+  width: 16px;
   height: 1.5px;
-  background: var(--color-text-primary);
+  background: var(--text);
   transition: var(--transition);
+  position: relative;
 }
-.hamburger span { top: 50%; transform: translateY(-50%); }
-.hamburger span::before { content: ''; top: -6px; }
-.hamburger span::after { content: ''; top: 6px; }
-.hamburger span.active { background: transparent; }
-.hamburger span.active::before { transform: translateY(6px) rotate(45deg); }
-.hamburger span.active::after { transform: translateY(-6px) rotate(-45deg); }
+.hamburger span::before,
+.hamburger span::after {
+  content: '';
+  position: absolute;
+}
+.hamburger span::before { top: -5px; }
+.hamburger span::after  { top: 5px; }
+.hamburger span.open { background: transparent; }
+.hamburger span.open::before { transform: rotate(45deg) translate(3.5px, 3.5px); }
+.hamburger span.open::after  { transform: rotate(-45deg) translate(3.5px, -3.5px); }
 
-/* Mobile menu */
-.mobile-menu {
-  display: none;
+/* Mobile drawer */
+.mobile-drawer {
+  display: flex;
   flex-direction: column;
-  padding: 16px 24px;
-  background: var(--color-bg-surface);
-  border-bottom: 1px solid var(--color-border);
-  gap: 4px;
+  background: #fff;
+  border-bottom: 1px solid var(--border);
+  padding: 8px 16px 16px;
+  gap: 2px;
 }
-.mobile-menu a, .mobile-menu button {
-  padding: 12px 16px;
+.drawer-item {
+  display: block;
+  padding: 12px 14px;
   border-radius: var(--radius-sm);
   font-size: 15px;
-  color: var(--color-text-secondary);
-  text-align: left;
+  font-weight: 500;
+  color: var(--text-sub);
   background: transparent;
+  border: none;
+  text-align: left;
   transition: var(--transition);
+  cursor: pointer;
+  width: 100%;
 }
-.mobile-menu a:hover, .mobile-menu button:hover {
-  color: var(--color-text-primary);
-  background: rgba(255,255,255,0.05);
-}
+.drawer-item:hover { background: var(--bg); color: var(--text); }
+.drawer-item--primary { color: var(--primary); font-weight: 600; }
+.drawer-item--danger  { color: var(--red); }
 
-.slide-down-enter-active, .slide-down-leave-active {
-  transition: all 0.25s;
+/* Drawer transition */
+.drawer-enter-active, .drawer-leave-active {
+  transition: all 0.2s ease;
   overflow: hidden;
 }
-.slide-down-enter-from, .slide-down-leave-to {
+.drawer-enter-from, .drawer-leave-to {
   max-height: 0;
   opacity: 0;
 }
-.slide-down-enter-to, .slide-down-leave-from {
-  max-height: 400px;
+.drawer-enter-to, .drawer-leave-from {
+  max-height: 500px;
   opacity: 1;
 }
 
 @media (max-width: 768px) {
   .nav-links { display: none; }
-  .hamburger { display: flex; align-items: center; justify-content: center; }
-  .mobile-menu { display: flex; }
   .nav-actions .btn { display: none; }
-  .nav-username { display: none; }
+  .nav-user { display: none; }
+  .hamburger { display: flex; }
 }
 </style>

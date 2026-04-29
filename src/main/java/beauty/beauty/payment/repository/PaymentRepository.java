@@ -12,7 +12,7 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     Optional<Payment> findByReservationId(Long reservationId);
 
     // 예약 ID 목록으로 결제 내역 한 번에 조회
-    List<Payment> findByReservationIdIn(List<Long> reservationIds);
+    List<Payment> findByReservationIdInOrderByCreatedAtAsc(List<Long> reservationIds);
 
 
     // 10분 이상 지난 PENDING 결제를 스케줄러에서 청소할 때 사용

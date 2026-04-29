@@ -1,5 +1,6 @@
 package beauty.beauty.payment.service;
 
+import beauty.beauty.chat.service.ChatService;
 import beauty.beauty.payment.dto.*;
 import beauty.beauty.payment.entity.Payment;
 import beauty.beauty.payment.repository.PaymentRepository;
@@ -32,6 +33,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentRepository paymentRepository;
     private final ReservationRepository reservationRepository;
     private final UserRepository userRepository;
+    private final ChatService chatService;
 
     @Value("${toss.secret-key}")
     private String secretKey;
@@ -164,6 +166,9 @@ public class PaymentServiceImpl implements PaymentService {
         reservation.setStatus(Reservation.Status.CONFIRMED);
         reservationRepository.save(reservation);
 
+        // 결제 확정 즉시 채팅방 생성 — 고객과 미용사가 바로 소통 가능
+        chatService.createRoomForReservation(reservation);
+
         return PaymentResponse.from(payment);
     }
 
@@ -236,13 +241,13 @@ public class PaymentServiceImpl implements PaymentService {
     @Override
     public List<PaymentResponse> getMyPayments(Long userId) {
         // 1. userId로 본인 예약 ID 목록 조회
-        List<Long> reservationIds = reservationRepository.findByUserId(userId)
+        List<Long> reservationIds = reservationRepository.findByUserIdOrderByCreatedAtDesc(userId)
                 .stream()
                 .map(Reservation::getId)
                 .toList();
 
         // 2. 예약 ID 목록으로 결제 내역 조회
-        List<Payment> payments = paymentRepository.findByReservationIdIn(reservationIds);
+        List<Payment> payments = paymentRepository.findByReservationIdInOrderByCreatedAtAsc(reservationIds);
 
         // 3. PaymentResponse로 변환 후 반환
         return payments.stream()

@@ -26,9 +26,12 @@ CREATE TABLE users (
     provider_id VARCHAR(200)    NULL COMMENT '소셜 로그인 제공자가 발급한 고유 ID',
 
     -- 이메일 인증
-    is_verified TINYINT(1)      NOT NULL DEFAULT 0 COMMENT '이메일 인증 완료 여부 (0=미인증, 1=인증완료)',
+    is_verified   TINYINT(1)    NOT NULL DEFAULT 0   COMMENT '이메일 인증 완료 여부 (0=미인증, 1=인증완료)',
 
-    created_at  DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '계정 생성일시',
+    -- 토큰
+    refresh_token VARCHAR(500)  NULL                 COMMENT 'Refresh Token (로그아웃 시 NULL로 초기화)',
+
+    created_at    DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '계정 생성일시',
 
     PRIMARY KEY (id),
     UNIQUE KEY uq_users_username (username),
@@ -53,21 +56,35 @@ CREATE TABLE email_verifications (
 ) COMMENT '이메일 인증';
 
 -- ============================================================
--- 3. 미용사 프로필 (role=STYLIST 인 user 와 1:1)
+-- 3. 미용실
+-- ============================================================
+CREATE TABLE salons (
+    id          BIGINT          NOT NULL AUTO_INCREMENT          COMMENT '미용실 고유 PK',
+    name        VARCHAR(100)    NOT NULL                         COMMENT '미용실 이름',
+    address     VARCHAR(200)    NULL                             COMMENT '미용실 주소',
+    phone       VARCHAR(20)     NULL                             COMMENT '미용실 전화번호',
+    description TEXT            NULL                             COMMENT '미용실 소개',
+    created_at  DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '등록일시',
+
+    PRIMARY KEY (id)
+) COMMENT '미용실';
+
+-- ============================================================
+-- 4. 미용사 프로필 (role=STYLIST 인 user 와 1:1)
 -- ============================================================
 CREATE TABLE stylist_profiles (
     id           BIGINT          NOT NULL AUTO_INCREMENT COMMENT '미용사 프로필 고유 PK',
     user_id      BIGINT          NOT NULL               COMMENT 'users.id 참조 (role=STYLIST인 회원)',
-    salon_name   VARCHAR(100)    NULL                   COMMENT '샵/살롱 이름',
-    location     VARCHAR(200)    NULL                   COMMENT '영업 위치 (주소)',
+    salon_id     BIGINT          NULL                   COMMENT 'salons.id 참조 (소속 미용실)',
     bio          TEXT            NULL                   COMMENT '자기소개 및 스타일링 소개',
-    experience   INT             NOT NULL DEFAULT 0 COMMENT '경력 연수',
-    rating       DECIMAL(2,1)    NOT NULL DEFAULT 0.0 COMMENT '평점 캐싱 (리뷰 작성 시 갱신, 0.0~5.0)',
-    review_count INT             NOT NULL DEFAULT 0   COMMENT '리뷰 수 캐싱 (리뷰 작성 시 갱신)',
+    experience   INT             NOT NULL DEFAULT 0     COMMENT '경력 연수',
+    rating       DECIMAL(3,1)    NOT NULL DEFAULT 0.0   COMMENT '평점 캐싱 (리뷰 작성 시 갱신, 0.0~5.0)',
+    review_count INT             NOT NULL DEFAULT 0     COMMENT '리뷰 수 캐싱 (리뷰 작성 시 갱신)',
 
     PRIMARY KEY (id),
     UNIQUE KEY uq_sp_user_id (user_id),
-    CONSTRAINT fk_sp_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    CONSTRAINT fk_sp_user  FOREIGN KEY (user_id)  REFERENCES users(id)  ON DELETE CASCADE,
+    CONSTRAINT fk_sp_salon FOREIGN KEY (salon_id) REFERENCES salons(id) ON DELETE SET NULL
 ) COMMENT '미용사 프로필';
 
 -- ============================================================
@@ -77,8 +94,10 @@ CREATE TABLE stylist_services (
     id          BIGINT          NOT NULL AUTO_INCREMENT COMMENT '서비스 항목 고유 PK',
     stylist_id  BIGINT          NOT NULL               COMMENT 'stylist_profiles.id 참조',
     name        VARCHAR(100)    NOT NULL COMMENT '서비스명 (커트, 펌 등)',
+    category    VARCHAR(50)     NULL     COMMENT '서비스 카테고리 (커트, 펌, 염색, 케어, 기타)',
     price       INT             NOT NULL COMMENT '서비스 가격 (원)',
     duration    INT             NOT NULL COMMENT '서비스 소요시간 (분)',
+    description VARCHAR(255)    NULL     COMMENT '서비스 설명',
     is_active   TINYINT(1)      NOT NULL DEFAULT 1     COMMENT '서비스 활성 여부 (0=비활성, 1=활성)',
 
     PRIMARY KEY (id),
@@ -178,11 +197,13 @@ CREATE TABLE payments (
 -- 10. 채팅방 (예약 확정 시 자동 생성)
 -- ============================================================
 CREATE TABLE chat_rooms (
-    id              BIGINT      NOT NULL AUTO_INCREMENT          COMMENT '채팅방 고유 PK',
-    reservation_id  BIGINT      NOT NULL                         COMMENT '연결된 예약 (reservations.id 참조, 예약 1개당 채팅방 1개)',
-    user_id         BIGINT      NOT NULL COMMENT '채팅 참여 고객 (users.id 참조)',
-    stylist_user_id BIGINT      NOT NULL COMMENT '채팅 참여 미용사 (users.id 참조, stylist_profiles가 아닌 users 직접 참조)',
-    created_at      DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '채팅방 생성일시',
+    id                   BIGINT       NOT NULL AUTO_INCREMENT          COMMENT '채팅방 고유 PK',
+    reservation_id       BIGINT       NOT NULL                         COMMENT '연결된 예약 (reservations.id 참조, 예약 1개당 채팅방 1개)',
+    user_id              BIGINT       NOT NULL COMMENT '채팅 참여 고객 (users.id 참조)',
+    stylist_user_id      BIGINT       NOT NULL COMMENT '채팅 참여 미용사 (users.id 참조, stylist_profiles가 아닌 users 직접 참조)',
+    last_message_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '마지막 메시지 전송 시각 (채팅방 목록 최신순 정렬 기준)',
+    last_message_content VARCHAR(300) NULL     COMMENT '마지막 메시지 내용 미리보기',
+    created_at           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '채팅방 생성일시',
 
     PRIMARY KEY (id),
     UNIQUE KEY uq_cr_reservation (reservation_id),

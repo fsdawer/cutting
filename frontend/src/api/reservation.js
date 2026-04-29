@@ -25,4 +25,10 @@ export const reservationApi = {
   /** GET /api/reservations/stylists/{stylistId}/booked-times — 특정 미용사의 특정 날짜 예약된 시간 리스트 조회 (고객용/예약화면용) */
   getBookedTimes: (stylistId, date) =>
     api.get(`/api/reservations/stylists/${stylistId}/booked-times`, { params: { date } }),
+
+  /** POST /api/reservations/{id}/images — 예약 이미지 업로드 */
+  uploadImages: (id, formData) =>
+    api.post(`/api/reservations/${id}/images`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
 }

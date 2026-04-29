@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
+import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import java.util.List;
@@ -19,6 +20,11 @@ public class WebConfig implements WebMvcConfigurer {
     public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
         resolvers.add(loginUserIdResolver);
     }
-    
-    // (기존 Cors 설정 등이 있다면 여기에 작성 유지)
+
+    // uploads/ 디렉토리를 정적 리소스로 서빙 → /uploads/** URL로 접근 가능
+    @Override
+    public void addResourceHandlers(ResourceHandlerRegistry registry) {
+        registry.addResourceHandler("/uploads/**")
+                .addResourceLocations("file:uploads/");
+    }
 }
