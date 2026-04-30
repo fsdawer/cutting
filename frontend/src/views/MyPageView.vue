@@ -64,7 +64,12 @@
                     <RouterLink v-if="r.chatRoomId" :to="`/chat/${r.chatRoomId}`" class="btn btn-primary btn-sm">채팅</RouterLink>
                     <button class="btn btn-ghost btn-sm" @click="openResModal(r)">상세</button>
                     <button
-                      v-if="r.status === 'CONFIRMED' || r.status === 'PENDING'"
+                      v-if="r.status === 'DONE' && !reviewedIds.has(r.id)"
+                      class="btn btn-outline btn-sm"
+                      @click="openReviewModal(r)"
+                    >리뷰 작성</button>
+                    <button
+                      v-if="r.status === 'CONFIRMED'"
                       class="btn btn-ghost btn-sm"
                       style="color:var(--red)"
                       @click="cancelReservation(r.id)"
@@ -88,11 +93,14 @@
               <div v-for="p in payments" :key="p.id" class="card pay-card">
                 <div class="pc-row">
                   <div>
-                    <p class="pc-order">{{ p.orderId }}</p>
-                    <p class="pc-date">{{ formatDate(p.paidAt || p.createdAt) }}</p>
+                    <p class="pc-service-name">{{ p.serviceName }}</p>
+                    <p class="pc-stylist">{{ p.stylistName }}<span v-if="p.salonName"> · {{ p.salonName }}</span></p>
+                    <p class="pc-date">주문일자 {{ formatDate(p.createdAt) }}</p>
+                    <p class="pc-order-id">주문번호 {{ p.orderId }}</p>
                   </div>
-                  <div style="text-align:right">
+                  <div style="text-align:right;flex-shrink:0;margin-left:12px">
                     <p class="pc-amount">{{ p.amount?.toLocaleString() }}원</p>
+                    <p class="pc-method">{{ payMethodLabel(p.method) }}</p>
                     <span class="badge" :class="payStatusBadge(p.status)">{{ payStatusLabel(p.status) }}</span>
                   </div>
                 </div>
@@ -176,6 +184,34 @@
       </div>
     </div>
 
+    <!-- Review Write Modal -->
+    <div v-if="showReviewModal && reviewTarget" class="modal-overlay" @click.self="showReviewModal = false">
+      <div class="modal-box card">
+        <h2 class="modal-title">리뷰 작성</h2>
+        <p class="modal-sub">{{ reviewTarget.stylistName }} · {{ reviewTarget.serviceName }}</p>
+        <div class="star-row">
+          <button
+            v-for="n in 5" :key="n"
+            class="star-btn" :class="{ filled: n <= reviewForm.rating }"
+            @click="reviewForm.rating = n"
+          >★</button>
+        </div>
+        <textarea
+          v-model="reviewForm.content"
+          class="review-textarea"
+          placeholder="리뷰 내용을 입력하세요"
+          rows="4"
+        ></textarea>
+        <p v-if="reviewErrMsg" class="msg-error">{{ reviewErrMsg }}</p>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" @click="showReviewModal = false">취소</button>
+          <button class="btn btn-primary" :disabled="reviewSaving" @click="submitReview">
+            {{ reviewSaving ? '등록 중...' : '등록하기' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Reservation Detail Modal -->
     <div v-if="showResModal && selectedRes" class="modal-overlay" @click.self="showResModal = false">
       <div class="modal-box card">
@@ -218,6 +254,7 @@ import { useRouter } from 'vue-router'
 import { reservationApi } from '@/api/reservation'
 import { paymentApi } from '@/api/payment'
 import { userApi } from '@/api/user'
+import { reviewApi } from '@/api/review'
 
 const authStore = useAuthStore()
 const router    = useRouter()
@@ -233,10 +270,10 @@ const resLoading   = ref(false)
 const reservations = ref([])
 const statusFilter = ref('all')
 const statusFilters = [
-  { label: '전체', value: 'all' },
+  { label: '전체',     value: 'all' },
   { label: '예약확정', value: 'CONFIRMED' },
-  { label: '완료', value: 'DONE' },
-  { label: '취소', value: 'CANCELLED' },
+  { label: '완료',     value: 'DONE' },
+  { label: '취소됨',   value: 'CANCELLED' },
 ]
 
 const filteredReservations = computed(() =>
@@ -246,15 +283,45 @@ const filteredReservations = computed(() =>
 )
 
 function statusLabel(s) {
-  return { PENDING: '결제대기', CONFIRMED: '예약확정', DONE: '완료', CANCELLED: '취소됨' }[s] || s
+  return { CONFIRMED: '예약확정', DONE: '완료', CANCELLED: '취소됨' }[s] || s
 }
 function statusBadge(s) {
-  return { PENDING: 'badge-gold', CONFIRMED: 'badge-green', DONE: 'badge-gray', CANCELLED: 'badge-red' }[s] || ''
+  return { CONFIRMED: 'badge-green', DONE: 'badge-gray', CANCELLED: 'badge-red' }[s] || ''
 }
 
 const showResModal = ref(false)
 const selectedRes  = ref(null)
 function openResModal(r) { selectedRes.value = r; showResModal.value = true }
+
+// 리뷰
+const reviewedIds     = ref(new Set())
+const showReviewModal = ref(false)
+const reviewTarget    = ref(null)
+const reviewForm      = ref({ rating: 5, content: '' })
+const reviewErrMsg    = ref('')
+const reviewSaving    = ref(false)
+
+function openReviewModal(r) {
+  reviewTarget.value  = r
+  reviewForm.value    = { rating: 5, content: '' }
+  reviewErrMsg.value  = ''
+  showReviewModal.value = true
+}
+
+async function submitReview() {
+  reviewSaving.value = true; reviewErrMsg.value = ''
+  try {
+    await reviewApi.create({
+      reservationId: reviewTarget.value.id,
+      rating: reviewForm.value.rating,
+      content: reviewForm.value.content,
+    })
+    reviewedIds.value.add(reviewTarget.value.id)
+    showReviewModal.value = false
+  } catch (e) {
+    reviewErrMsg.value = e.response?.data?.message || '리뷰 등록 중 오류가 발생했습니다.'
+  } finally { reviewSaving.value = false }
+}
 
 function formatDate(str) {
   if (!str) return ''
@@ -288,6 +355,9 @@ function payStatusLabel(s) {
 }
 function payStatusBadge(s) {
   return { PENDING: 'badge-gold', PAID: 'badge-green', REFUNDED: 'badge-gray', FAILED: 'badge-red' }[s] || ''
+}
+function payMethodLabel(m) {
+  return { TOSS: '토스페이', NAVER_PAY: '네이버페이', KAKAO_PAY: '카카오페이' }[m] || m || '결제'
 }
 
 async function loadPayments() {
@@ -425,9 +495,12 @@ onMounted(() => { loadReservations(); loadPayments() })
 
 .pay-card { padding: 16px 18px; }
 .pc-row   { display: flex; justify-content: space-between; align-items: center; }
-.pc-order  { font-size: 13px; color: var(--text-muted); margin-bottom: 2px; }
-.pc-date   { font-size: 12px; color: var(--text-muted); }
-.pc-amount { font-size: 16px; font-weight: 700; color: var(--primary); margin-bottom: 4px; }
+.pc-service-name { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 3px; }
+.pc-stylist  { font-size: 13px; color: var(--text-sub); margin-bottom: 4px; }
+.pc-date     { font-size: 12px; color: var(--text-muted); margin-bottom: 2px; }
+.pc-order-id { font-size: 11px; color: var(--text-muted); font-family: monospace; word-break: break-all; max-width: 200px; }
+.pc-amount   { font-size: 16px; font-weight: 700; color: var(--primary); margin-bottom: 4px; }
+.pc-method   { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
 
 /* Profile edit */
 .edit-card  { padding: 24px; margin-bottom: 14px; }
@@ -454,6 +527,20 @@ onMounted(() => { loadReservations(); loadPayments() })
 .modal-title { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
 .modal-sub   { font-size: 13px; color: var(--text-sub); margin-bottom: 20px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+
+/* Review modal */
+.star-row { display: flex; gap: 4px; margin-bottom: 10px; }
+.star-btn {
+  font-size: 26px; background: none; border: none; cursor: pointer;
+  color: var(--border); transition: color 0.1s; padding: 0; line-height: 1;
+}
+.star-btn.filled { color: #FFCC00; }
+.review-textarea {
+  width: 100%; border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+  padding: 10px 12px; font-size: 14px; resize: vertical; font-family: inherit;
+  margin-bottom: 8px;
+}
+.review-textarea:focus { outline: none; border-color: var(--primary); }
 
 .detail-rows { display: flex; flex-direction: column; gap: 12px; margin-bottom: 4px; }
 .detail-row  { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 14px; }

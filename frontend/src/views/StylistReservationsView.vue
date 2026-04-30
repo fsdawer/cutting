@@ -44,12 +44,12 @@
             </div>
             <div class="rc-actions">
               <button
-                v-if="r.status === 'PENDING' || r.status === 'CONFIRMED'"
+                v-if="r.status === 'CONFIRMED'"
                 class="btn btn-primary btn-sm"
                 @click="updateStatus(r.id, 'DONE')"
               >완료 처리</button>
               <button
-                v-if="r.status === 'PENDING' || r.status === 'CONFIRMED'"
+                v-if="r.status === 'CONFIRMED'"
                 class="btn btn-ghost btn-sm danger"
                 @click="updateStatus(r.id, 'CANCELLED')"
               >취소</button>
@@ -107,31 +107,28 @@ const reservations = ref([])
 const activeTab    = ref('active')
 
 const tabs = [
-  { label: '전체',   value: 'all' },
-  { label: '대기중', value: 'active' },
-  { label: '완료',   value: 'DONE' },
-  { label: '취소',   value: 'CANCELLED' },
+  { label: '전체',     value: 'all' },
+  { label: '예약확정', value: 'CONFIRMED' },
+  { label: '완료',     value: 'DONE' },
+  { label: '취소',     value: 'CANCELLED' },
 ]
 
 const filteredReservations = computed(() => {
-  if (activeTab.value === 'all')    return reservations.value
-  if (activeTab.value === 'active') return reservations.value.filter(r => r.status === 'PENDING' || r.status === 'CONFIRMED')
+  if (activeTab.value === 'all') return reservations.value
   return reservations.value.filter(r => r.status === activeTab.value)
 })
 
 function countByTab(tabValue) {
   if (tabValue === 'all') return null
-  const list = tabValue === 'active'
-    ? reservations.value.filter(r => r.status === 'PENDING' || r.status === 'CONFIRMED')
-    : reservations.value.filter(r => r.status === tabValue)
+  const list = reservations.value.filter(r => r.status === tabValue)
   return list.length > 0 ? list.length : null
 }
 
 function statusLabel(s) {
-  return { PENDING: '대기중', CONFIRMED: '대기중', DONE: '완료', CANCELLED: '취소됨' }[s] || s
+  return { CONFIRMED: '예약확정', DONE: '완료', CANCELLED: '취소됨' }[s] || s
 }
 function statusBadge(s) {
-  return { PENDING: 'badge-gold', CONFIRMED: 'badge-gold', DONE: 'badge-gray', CANCELLED: 'badge-red' }[s] || ''
+  return { CONFIRMED: 'badge-green', DONE: 'badge-gray', CANCELLED: 'badge-red' }[s] || ''
 }
 function formatDate(str) {
   if (!str) return ''

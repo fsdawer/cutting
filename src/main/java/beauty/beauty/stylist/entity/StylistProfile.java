@@ -28,9 +28,11 @@ public class StylistProfile {
     @Column(nullable = false)
     private int experience = 0;
 
+    @Builder.Default
     @Column(nullable = false, precision = 3, scale = 1)
     private BigDecimal rating = BigDecimal.ZERO;
 
+    @Builder.Default
     @Column(name = "review_count", nullable = false)
     private int reviewCount = 0;
 }

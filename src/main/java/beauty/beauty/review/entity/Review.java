@@ -5,6 +5,8 @@ import beauty.beauty.stylist.entity.StylistProfile;
 import beauty.beauty.user.entity.User;
 import jakarta.persistence.*;
 import lombok.*;
+
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
@@ -29,7 +31,7 @@ public class Review {
     private StylistProfile stylistProfile;
 
     @Column(nullable = false)
-    private int rating;
+    private BigDecimal rating;
 
     @Column(columnDefinition = "TEXT")
     private String content;

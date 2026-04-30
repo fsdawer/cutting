@@ -62,7 +62,7 @@ public class AuthServiceImpl implements AuthService {
                 .phone(request.getPhone())
                 .role(User.Role.valueOf(request.getRole())) // 동적 권한 할당
                 .provider(User.Provider.LOCAL)
-                .isVerified(true)   // TODO: 배포 전 false로 변경 후 이메일 인증 활성화
+                .isVerified(false)
                 .build();
         userRepository.save(user);
 
@@ -81,8 +81,7 @@ public class AuthServiceImpl implements AuthService {
         }
 
         // 3. 이메일 인증 메일 발송
-        // TODO: 배포 전 아래 주석 해제 (isVerified=false 로 되돌릴 때 함께 활성화)
-        // sendVerificationEmail(request.getEmail());
+        sendVerificationEmail(request.getEmail());
     }
 
     // ──────────────────────────────────────────────────────────

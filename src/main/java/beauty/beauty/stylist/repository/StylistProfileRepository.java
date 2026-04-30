@@ -13,12 +13,17 @@ public interface StylistProfileRepository extends JpaRepository<StylistProfile, 
 
     Optional<StylistProfile> findByUserId(Long userId);
 
+    @Query("SELECT s FROM StylistProfile s JOIN FETCH s.user LEFT JOIN FETCH s.salon WHERE s.salon.id = :salonId")
+    List<StylistProfile> findBySalonId(@Param("salonId") Long salonId);
+
     // N+1 해결용: userId 목록으로 (userId, salonName) 쌍을 한 번에 조회
     @Query("SELECT s.user.id, s.salon.name FROM StylistProfile s LEFT JOIN s.salon WHERE s.user.id IN :userIds")
     List<Object[]> findSalonNamesByUserIds(@Param("userIds") Collection<Long> userIds);
 
-    @Query("SELECT DISTINCT s FROM StylistProfile s LEFT JOIN s.salon sal WHERE " +
-            "(:keyword IS NULL OR sal.name LIKE %:keyword% OR s.user.name LIKE %:keyword%) AND " +
+    @Query("SELECT DISTINCT s FROM StylistProfile s " +
+            "JOIN FETCH s.user u " +
+            "LEFT JOIN FETCH s.salon sal WHERE " +
+            "(:keyword IS NULL OR sal.name LIKE %:keyword% OR u.name LIKE %:keyword%) AND " +
             "(:location IS NULL OR sal.address LIKE %:location%)")
     List<StylistProfile> searchStylists(@Param("keyword") String keyword, @Param("location") String location);
 }

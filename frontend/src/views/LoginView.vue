@@ -87,11 +87,11 @@ async function handleLogin() {
       username: form.value.username,
       password: form.value.password,
     })
-    const token = res.data.accessToken
+    const { accessToken, refreshToken } = res.data
     const userRes = await axios.get('http://localhost:8080/api/users/me', {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${accessToken}` },
     })
-    auth.setAuth(userRes.data, token)
+    auth.setAuth(userRes.data, accessToken, refreshToken)
     router.push(route.query.redirect || '/')
   } catch (e) {
     errorMsg.value = e.response?.data?.message || '아이디 또는 비밀번호가 올바르지 않습니다.'

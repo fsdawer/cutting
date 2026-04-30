@@ -20,7 +20,8 @@ const auth   = useAuthStore()
 onMounted(async () => {
   // 백엔드가 리다이렉트한 URL에서 token 추출
   // 예: /oauth2/callback?token=eyJhbGci...
-  const token = route.query.token
+  const token        = route.query.token
+  const refreshToken = route.query.refreshToken
 
   if (!token) {
     router.push('/login')
@@ -28,13 +29,10 @@ onMounted(async () => {
   }
 
   try {
-    // 토큰으로 내 정보 조회
     const res = await axios.get('http://localhost:8080/api/users/me', {
       headers: { Authorization: `Bearer ${token}` }
     })
-
-    // authStore에 유저 정보와 토큰 저장
-    auth.setAuth(res.data, token)
+    auth.setAuth(res.data, token, refreshToken)
 
     // 홈으로 이동
     router.push('/')

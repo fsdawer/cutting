@@ -1,5 +1,7 @@
 package beauty.beauty.reservation.service;
 
+import beauty.beauty.chat.entity.ChatRoom;
+import beauty.beauty.chat.repository.ChatRoomRepository;
 import beauty.beauty.chat.service.ChatServiceImpl;
 import beauty.beauty.reservation.dto.ReservationRequest;
 import beauty.beauty.reservation.dto.ReservationResponse;
@@ -23,6 +25,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Map;
+import java.util.stream.Collectors;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -44,6 +48,7 @@ public class ReservationServiceImpl implements ReservationService {
     private final ReservationImageRepository reservationImageRepository;
     private final OperatingHoursRepository operatingHoursRepository;
     private final ChatServiceImpl chatService;
+    private final ChatRoomRepository chatRoomRepository;
 
     private static final String UPLOAD_DIR = "uploads/reservation-images/";
 
@@ -95,13 +100,15 @@ public class ReservationServiceImpl implements ReservationService {
                 .stylistProfile(stylist)
                 .service(stylistServiceItem)
                 .reservedAt(request.getReservedAt())
-                .status(Reservation.Status.PENDING)
+                .status(Reservation.Status.CONFIRMED)
                 .requestMemo(request.getRequestMemo())
                 .totalPrice(stylistServiceItem.getPrice())
                 .createdAt(LocalDateTime.now())
                 .build();
 
-        return ReservationResponse.from(reservationRepository.save(reservation), null);
+        Reservation saved = reservationRepository.save(reservation);
+        ChatRoom chatRoom = chatService.createRoomForReservation(saved);
+        return ReservationResponse.from(saved, chatRoom.getId());
     }
 
     // 2. 예약 이미지 업로드
@@ -149,8 +156,10 @@ public class ReservationServiceImpl implements ReservationService {
     @Override
     @Transactional(readOnly = true)
     public List<ReservationResponse> getMyReservations(Long userId) {
-        return reservationRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
-                .map(r -> ReservationResponse.from(r, null))
+        List<Reservation> reservations = reservationRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        Map<Long, Long> chatRoomIdMap = buildChatRoomIdMap(reservations);
+        return reservations.stream()
+                .map(r -> ReservationResponse.from(r, chatRoomIdMap.get(r.getId())))
                 .toList();
     }
 
@@ -170,7 +179,9 @@ public class ReservationServiceImpl implements ReservationService {
             throw new IllegalArgumentException("해당 예약 정보를 볼 권한이 없습니다.");
         }
 
-        return ReservationResponse.from(reservation, null);
+        Long chatRoomId = chatRoomRepository.findByReservationId(reservationId)
+                .map(ChatRoom::getId).orElse(null);
+        return ReservationResponse.from(reservation, chatRoomId);
     }
 
     // 5. 예약 취소
@@ -200,8 +211,10 @@ public class ReservationServiceImpl implements ReservationService {
         StylistProfile stylistProfile = stylistProfileRepository.findByUserId(userId)
                 .orElseThrow(() -> new IllegalArgumentException("미용사 프로필이 없습니다"));
 
-        return reservationRepository.findByStylistProfileId(stylistProfile.getId()).stream()
-                .map(r -> ReservationResponse.from(r, null))
+        List<Reservation> reservations = reservationRepository.findByStylistProfileId(stylistProfile.getId());
+        Map<Long, Long> chatRoomIdMap = buildChatRoomIdMap(reservations);
+        return reservations.stream()
+                .map(r -> ReservationResponse.from(r, chatRoomIdMap.get(r.getId())))
                 .toList();
     }
 
@@ -235,6 +248,14 @@ public class ReservationServiceImpl implements ReservationService {
         if (newStatus == Reservation.Status.CONFIRMED) {
             chatService.createRoomForReservation(reservation);
         }
+    }
+
+    // 예약 목록 → reservationId:chatRoomId 맵 (N+1 방지용 배치 조회)
+    private Map<Long, Long> buildChatRoomIdMap(List<Reservation> reservations) {
+        if (reservations.isEmpty()) return Map.of();
+        List<Long> ids = reservations.stream().map(Reservation::getId).toList();
+        return chatRoomRepository.findByReservationIdIn(ids).stream()
+                .collect(Collectors.toMap(cr -> cr.getReservation().getId(), ChatRoom::getId));
     }
 
     // 8. 특정 날짜 예약된 시간대 조회

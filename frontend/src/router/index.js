@@ -45,12 +45,6 @@ const routes = [
     meta: { requiresAuth: true },
   },
   {
-    path: '/payment/:reservationId',
-    name: 'Payment',
-    component: () => import('@/views/PaymentView.vue'),
-    meta: { requiresAuth: true },
-  },
-  {
     path: '/payment/success',
     name: 'PaymentSuccess',
     component: () => import('@/views/PaymentSuccessView.vue'),
@@ -60,6 +54,12 @@ const routes = [
     path: '/payment/fail',
     name: 'PaymentFail',
     component: () => import('@/views/PaymentFailView.vue'),
+  },
+  {
+    path: '/payment/:reservationId',
+    name: 'Payment',
+    component: () => import('@/views/PaymentView.vue'),
+    meta: { requiresAuth: true },
   },
   {
     path: '/mypage',

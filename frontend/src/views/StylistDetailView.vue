@@ -93,6 +93,85 @@
             <div class="card content-card" v-if="!services.length && !portfolios.length">
               <p class="no-content">아직 등록된 서비스나 포트폴리오가 없습니다.</p>
             </div>
+
+            <!-- 리뷰 탭 -->
+            <div class="card content-card">
+              <h2 class="content-title">
+                리뷰
+                <span class="review-count-badge">{{ reviews.length }}</span>
+              </h2>
+
+              <!-- 리뷰 작성 폼 -->
+              <div v-if="canWriteReview" class="review-form-wrap">
+                <p class="review-form-hint">완료된 예약에 대한 리뷰를 남겨보세요.</p>
+                <div class="star-row">
+                  <button
+                    v-for="n in 5" :key="n"
+                    class="star-btn"
+                    :class="{ filled: n <= newRating }"
+                    @click="newRating = n"
+                  >★</button>
+                </div>
+                <textarea
+                  v-model="newContent"
+                  class="review-textarea"
+                  placeholder="리뷰 내용을 입력하세요"
+                  rows="3"
+                ></textarea>
+                <p v-if="reviewError" class="review-error">{{ reviewError }}</p>
+                <button class="btn btn-primary btn-sm" :disabled="reviewSubmitting" @click="submitReview">
+                  {{ reviewSubmitting ? '등록 중...' : '리뷰 등록' }}
+                </button>
+              </div>
+
+              <!-- 내가 쓴 리뷰 -->
+              <div v-if="myReview" class="review-item my-review">
+                <div class="review-header">
+                  <img :src="myReview.userProfileImg || `https://i.pravatar.cc/36?u=${myReview.userId}`" class="review-avatar" />
+                  <div>
+                    <p class="review-author">{{ myReview.userName }} <span class="my-badge">내 리뷰</span></p>
+                    <div class="review-stars">
+                      <span v-for="n in 5" :key="n" class="star-text" :class="{ filled: n <= myReview.rating }">★</span>
+                    </div>
+                  </div>
+                  <div class="review-actions">
+                    <button class="btn btn-ghost btn-xs" @click="startEdit">수정</button>
+                    <button class="btn btn-ghost btn-xs" style="color:var(--red)" @click="deleteMyReview">삭제</button>
+                  </div>
+                </div>
+                <div v-if="editMode" class="edit-form-wrap">
+                  <div class="star-row">
+                    <button v-for="n in 5" :key="n" class="star-btn" :class="{ filled: n <= editRating }" @click="editRating = n">★</button>
+                  </div>
+                  <textarea v-model="editContent" class="review-textarea" rows="3"></textarea>
+                  <div class="edit-actions">
+                    <button class="btn btn-ghost btn-sm" @click="editMode = false">취소</button>
+                    <button class="btn btn-primary btn-sm" @click="saveEdit">저장</button>
+                  </div>
+                </div>
+                <p v-else class="review-content">{{ myReview.content }}</p>
+                <p class="review-date">{{ formatDate(myReview.createdAt) }}</p>
+              </div>
+
+              <!-- 리뷰 목록 -->
+              <div v-if="otherReviews.length === 0 && !myReview" class="no-content">
+                아직 리뷰가 없습니다.
+              </div>
+              <div v-for="r in otherReviews" :key="r.id" class="review-item">
+                <div class="review-header">
+                  <img :src="r.userProfileImg || `https://i.pravatar.cc/36?u=${r.userId}`" class="review-avatar" />
+                  <div>
+                    <p class="review-author">{{ r.userName }}</p>
+                    <div class="review-stars">
+                      <span v-for="n in 5" :key="n" class="star-text" :class="{ filled: n <= r.rating }">★</span>
+                    </div>
+                  </div>
+                  <p class="review-service-badge">{{ r.serviceName }}</p>
+                </div>
+                <p class="review-content">{{ r.content }}</p>
+                <p class="review-date">{{ formatDate(r.createdAt) }}</p>
+              </div>
+            </div>
           </section>
         </div>
       </div>
@@ -104,6 +183,8 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { stylistApi } from '@/api/stylist'
+import { reviewApi } from '@/api/review'
+import { reservationApi } from '@/api/reservation'
 import { useAuthStore } from '@/stores/authStore'
 
 const route     = useRoute()
@@ -117,14 +198,91 @@ const services = ref([])
 const portfolios   = ref([])
 const workingHours = ref([])
 
+// 리뷰
+const reviews    = ref([])
+const newRating  = ref(5)
+const newContent = ref('')
+const reviewError      = ref('')
+const reviewSubmitting = ref(false)
+const eligibleReservationId = ref(null) // 리뷰 작성 가능한 예약 ID
+
+const myReview    = computed(() => reviews.value.find(r => r.userId === authStore.user?.id) ?? null)
+const otherReviews = computed(() => reviews.value.filter(r => r.userId !== authStore.user?.id))
+const canWriteReview = computed(() => isLoggedIn.value && !myReview.value && !!eligibleReservationId.value)
+
+const editMode    = ref(false)
+const editRating  = ref(5)
+const editContent = ref('')
+
+function startEdit() {
+  editRating.value  = myReview.value.rating
+  editContent.value = myReview.value.content
+  editMode.value = true
+}
+
+async function loadEligibleReservation() {
+  if (!isLoggedIn.value) return
+  try {
+    const { data } = await reservationApi.getMyReservations()
+    const stylistId = Number(route.params.id)
+    const done = data.find(r => r.stylistId === stylistId && r.status === 'DONE')
+    eligibleReservationId.value = done?.id ?? null
+  } catch (e) { console.error(e) }
+}
+
+async function submitReview() {
+  if (!newRating.value) { reviewError.value = '별점을 선택하세요.'; return }
+  if (!eligibleReservationId.value) { reviewError.value = '완료된 예약이 있어야 리뷰를 작성할 수 있습니다.'; return }
+  reviewSubmitting.value = true; reviewError.value = ''
+  try {
+    await reviewApi.create({ reservationId: eligibleReservationId.value, rating: newRating.value, content: newContent.value })
+    newContent.value = ''; newRating.value = 5
+    await loadReviews()
+  } catch (e) {
+    reviewError.value = e.response?.data?.message || '리뷰 등록 중 오류가 발생했습니다.'
+  } finally { reviewSubmitting.value = false }
+}
+
+async function saveEdit() {
+  try {
+    await reviewApi.update(myReview.value.id, { rating: editRating.value, content: editContent.value })
+    editMode.value = false
+    await loadReviews()
+  } catch (e) { alert(e.response?.data?.message || '수정 중 오류가 발생했습니다.') }
+}
+
+async function deleteMyReview() {
+  if (!confirm('리뷰를 삭제하시겠습니까?')) return
+  try {
+    await reviewApi.remove(myReview.value.id)
+    await loadReviews()
+  } catch (e) { alert(e.response?.data?.message || '삭제 중 오류가 발생했습니다.') }
+}
+
+async function loadReviews() {
+  try {
+    const res = await reviewApi.getByStylist(route.params.id)
+    reviews.value = res.data
+  } catch (e) { console.error(e) }
+}
+
 const DAY_NAMES = ['월', '화', '수', '목', '금', '토', '일']
 const dayName = (idx) => DAY_NAMES[idx] ?? String(idx)
 const formatHours = (open, close) => (!open || !close) ? '미설정' : `${open.slice(0,5)} - ${close.slice(0,5)}`
+function formatDate(str) {
+  if (!str) return ''
+  const d = new Date(str)
+  return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`
+}
 
 onMounted(async () => {
   try {
-    const res  = await stylistApi.getStylist(route.params.id)
-    const data = res.data
+    const [profileRes] = await Promise.all([
+      stylistApi.getStylist(route.params.id),
+      loadReviews(),
+      loadEligibleReservation(),
+    ])
+    const data = profileRes.data
     stylist.value      = data
     services.value     = data.services ?? []
     portfolios.value   = data.portfolios ?? []
@@ -211,6 +369,63 @@ onMounted(async () => {
 .portfolio-img  { width: 100%; height: 100%; object-fit: cover; }
 .portfolio-empty { width: 100%; height: 100%; display: flex; align-items: flex-end; padding: 8px; }
 .portfolio-empty span { font-size: 11px; color: var(--text-muted); }
+
+/* Reviews */
+.review-count-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--primary); color: #fff;
+  font-size: 11px; font-weight: 700;
+  border-radius: var(--radius-full);
+  min-width: 20px; height: 20px; padding: 0 6px;
+  margin-left: 8px; vertical-align: middle;
+}
+.review-form-wrap {
+  background: var(--bg); border-radius: var(--radius-sm);
+  padding: 16px; margin-bottom: 20px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.review-form-hint { font-size: 13px; color: var(--text-muted); }
+.star-row { display: flex; gap: 4px; }
+.star-btn {
+  font-size: 22px; background: none; border: none; cursor: pointer;
+  color: var(--border); transition: color 0.1s;
+  padding: 0; line-height: 1;
+}
+.star-btn.filled { color: #FFCC00; }
+.review-textarea {
+  width: 100%; border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+  padding: 10px 12px; font-size: 14px; resize: vertical;
+  font-family: inherit;
+}
+.review-textarea:focus { outline: none; border-color: var(--primary); }
+.review-error { font-size: 13px; color: var(--red); }
+
+.review-item {
+  padding: 16px 0; border-bottom: 1px solid var(--border);
+}
+.review-item:last-child { border-bottom: none; }
+.my-review { background: #fffdf0; border-radius: var(--radius-sm); padding: 14px; margin-bottom: 8px; border-bottom: none; }
+.review-header { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+.review-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+.review-author { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+.my-badge {
+  display: inline-block; background: var(--primary); color: #fff;
+  font-size: 10px; font-weight: 700; border-radius: 4px;
+  padding: 1px 5px; margin-left: 6px; vertical-align: middle;
+}
+.review-stars { display: flex; gap: 2px; }
+.star-text { font-size: 14px; color: var(--border); }
+.star-text.filled { color: #FFCC00; }
+.review-service-badge {
+  margin-left: auto; font-size: 11px; color: var(--text-muted);
+  background: var(--bg); padding: 3px 8px; border-radius: var(--radius-full);
+  white-space: nowrap;
+}
+.review-actions { margin-left: auto; display: flex; gap: 4px; }
+.review-content { font-size: 14px; color: var(--text); line-height: 1.7; margin-bottom: 6px; }
+.review-date { font-size: 12px; color: var(--text-muted); }
+.edit-form-wrap { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.edit-actions { display: flex; gap: 6px; justify-content: flex-end; }
 
 .no-content { text-align: center; padding: 40px 0; color: var(--text-muted); font-size: 14px; }
 

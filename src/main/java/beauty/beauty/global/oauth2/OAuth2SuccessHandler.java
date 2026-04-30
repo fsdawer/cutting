@@ -42,12 +42,13 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         User user = userRepository.findByProviderAndProviderId(User.Provider.KAKAO, providerId)
                 .orElseThrow(() -> new IllegalStateException("OAuth2 유저를 찾을 수 없습니다."));
 
-        // JWT 발급
-        String accessToken = jwtUtil.generateAccessToken(user.getId(), user.getUsername(), user.getRole().name());
+        // JWT 발급 + Refresh Token DB 저장
+        String accessToken  = jwtUtil.generateAccessToken(user.getId(), user.getUsername(), user.getRole().name());
+        String refreshToken = jwtUtil.generateRefreshToken(user.getId());
+        user.setRefreshToken(refreshToken);
+        userRepository.save(user);
 
-        // 프론트로 토큰과 함께 리다이렉트
-        // 예: http://localhost:5173/oauth2/callback?token=eyJhbGci...
         getRedirectStrategy().sendRedirect(request, response,
-                REDIRECT_URL + "?token=" + accessToken);
+                REDIRECT_URL + "?token=" + accessToken + "&refreshToken=" + refreshToken);
     }
 }

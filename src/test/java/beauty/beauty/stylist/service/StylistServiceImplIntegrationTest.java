@@ -5,9 +5,11 @@ import beauty.beauty.stylist.dto.ServiceResponse;
 import beauty.beauty.stylist.dto.WorkingHoursRequest;
 import beauty.beauty.stylist.dto.WorkingHoursResponse;
 import beauty.beauty.stylist.entity.OperatingHours;
+import beauty.beauty.stylist.entity.Salon;
 import beauty.beauty.stylist.entity.StylistProfile;
 import beauty.beauty.stylist.entity.StylistServiceItem;
 import beauty.beauty.stylist.repository.OperatingHoursRepository;
+import beauty.beauty.stylist.repository.SalonRepository;
 import beauty.beauty.stylist.repository.StylistProfileRepository;
 import beauty.beauty.stylist.repository.StylistServiceRepository;
 import beauty.beauty.user.entity.User;
@@ -47,6 +49,9 @@ class StylistServiceImplIntegrationTest {
     @Autowired
     private OperatingHoursRepository operatingHoursRepository;
 
+    @Autowired
+    private SalonRepository salonRepository;
+
     private User testUser;
     private StylistProfile testProfile;
 
@@ -64,11 +69,16 @@ class StylistServiceImplIntegrationTest {
                 .build();
         userRepository.save(testUser);
 
-        // 2. 테스트용 미용사 프로필 생성
+        // 2. 테스트용 미용실 생성
+        Salon testSalon = salonRepository.save(Salon.builder()
+                .name("테스트 미용실")
+                .address("테스트시 테스트동")
+                .build());
+
+        // 3. 테스트용 미용사 프로필 생성
         testProfile = StylistProfile.builder()
                 .user(testUser)
-                .salonName("테스트 미용실")
-                .location("테스트시 테스트동")
+                .salon(testSalon)
                 .experience(5)
                 .build();
         stylistProfileRepository.save(testProfile);

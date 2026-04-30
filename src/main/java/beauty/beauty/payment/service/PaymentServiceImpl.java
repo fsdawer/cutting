@@ -239,6 +239,7 @@ public class PaymentServiceImpl implements PaymentService {
 
     // 내 결제 내역 조회
     @Override
+    @Transactional(readOnly = true)
     public List<PaymentResponse> getMyPayments(Long userId) {
         // 1. userId로 본인 예약 ID 목록 조회
         List<Long> reservationIds = reservationRepository.findByUserIdOrderByCreatedAtDesc(userId)

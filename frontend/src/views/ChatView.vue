@@ -118,34 +118,39 @@ onMounted(async () => {
   loading.value = false
 
   // STOMP WebSocket 연결
-  stompClient = new Client({
-    webSocketFactory: () => new SockJS('http://localhost:8080/ws'),
-    connectHeaders: {
-      // STOMP CONNECT 프레임에 JWT 포함 (서버 측 ChannelInterceptor에서 추후 검증 가능)
-      Authorization: `Bearer ${auth.token.value}`,
-    },
-    reconnectDelay: 3000,
-    onConnect: () => {
-      connected.value = true
-      stompClient.subscribe(`/topic/chat/${roomId}`, async (frame) => {
-        const msg = JSON.parse(frame.body)
-        if (msg.senderId === myId.value) {
-          // 내가 보낸 메시지 브로드캐스트 → 낙관적 임시 메시지를 서버 확정 메시지로 교체
-          const pendingIdx = messages.value.findIndex(m => m._pending && m.content === msg.content)
-          if (pendingIdx !== -1) {
-            messages.value.splice(pendingIdx, 1, msg)
+  try {
+    stompClient = new Client({
+      webSocketFactory: () => new SockJS('http://localhost:8080/ws'),
+      connectHeaders: {
+        Authorization: `Bearer ${auth.token}`,
+      },
+      reconnectDelay: 3000,
+      onConnect: () => {
+        connected.value = true
+        stompClient.subscribe(`/topic/chat/${roomId}`, async (frame) => {
+          const msg = JSON.parse(frame.body)
+          if (msg.senderId === myId.value) {
+            const pendingIdx = messages.value.findIndex(m => m._pending && m.content === msg.content)
+            if (pendingIdx !== -1) {
+              messages.value.splice(pendingIdx, 1, msg)
+            }
+          } else {
+            messages.value.push(msg)
+            await scrollToBottom()
+            chatApi.markAsRead(roomId).catch(() => {})
           }
-        } else {
-          // 상대방 메시지 수신
-          messages.value.push(msg)
-          await scrollToBottom()
-          chatApi.markAsRead(roomId).catch(() => {})
-        }
-      })
-    },
-    onDisconnect: () => { connected.value = false },
-  })
-  stompClient.activate()
+        })
+      },
+      onDisconnect: () => { connected.value = false },
+      onStompError: (frame) => {
+        console.error('STOMP 에러', frame)
+        connected.value = false
+      },
+    })
+    stompClient.activate()
+  } catch (e) {
+    console.error('WebSocket 연결 초기화 실패', e)
+  }
 })
 
 onUnmounted(() => {

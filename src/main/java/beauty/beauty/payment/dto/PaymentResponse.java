@@ -19,12 +19,18 @@ public class PaymentResponse {
     private String orderId;
     private String paymentKey;
     private int amount;
-    private String method;   // TOSS, KAKAO_PAY, NAVER_PAY
-    private String status;   // PENDING, PAID, REFUNDED
+    private String method;
+    private String status;
     private LocalDateTime paidAt;
     private LocalDateTime createdAt;
 
+    // 결제 카드 표시용
+    private String stylistName;
+    private String salonName;
+    private String serviceName;
+
     public static PaymentResponse from(Payment payment) {
+        var sp = payment.getReservation().getStylistProfile();
         return PaymentResponse.builder()
                 .id(payment.getId())
                 .reservationId(payment.getReservation().getId())
@@ -35,6 +41,9 @@ public class PaymentResponse {
                 .status(payment.getStatus().name())
                 .paidAt(payment.getPaidAt())
                 .createdAt(payment.getCreatedAt())
+                .stylistName(sp.getUser().getName())
+                .salonName(sp.getSalon() != null ? sp.getSalon().getName() : null)
+                .serviceName(payment.getReservation().getService().getName())
                 .build();
     }
 }
