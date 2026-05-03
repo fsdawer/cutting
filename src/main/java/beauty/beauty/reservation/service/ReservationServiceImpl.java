@@ -18,6 +18,8 @@ import beauty.beauty.stylist.repository.StylistServiceRepository;
 import beauty.beauty.user.entity.User;
 import beauty.beauty.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -53,8 +55,13 @@ public class ReservationServiceImpl implements ReservationService {
     private static final String UPLOAD_DIR = "uploads/reservation-images/";
 
     // 1. 예약 생성
+    // @CacheEvict: 예약을 새로 만들면 "이 미용사 이 날짜에 예약된 시간 목록" 캐시가 틀린 데이터가 됨
+    // → 해당 캐시 키(stylistId:날짜)를 즉시 삭제해서 다음 조회 때 DB에서 다시 읽게 함
+    // 예) stylistId=1, 날짜=2026-05-10 → Redis 키 "booked_times::1:2026-05-10" 삭제
     @Override
     @Transactional
+    @CacheEvict(value = "booked_times",
+                key = "#request.stylistId + ':' + #request.reservedAt.toLocalDate().toString()")
     public ReservationResponse createReservation(Long userId, ReservationRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
@@ -185,8 +192,13 @@ public class ReservationServiceImpl implements ReservationService {
     }
 
     // 5. 예약 취소
+    // @CacheEvict(allEntries=true): 취소된 슬롯이 다시 비어야 하므로 캐시를 무효화해야 함
+    // 그런데 캐시 키(stylistId:날짜)를 만들려면 reservationId로 DB를 먼저 읽어야 함
+    // @CacheEvict는 메서드 실행 전에 키를 평가하므로 이 시점에 stylistId를 알 수 없음
+    // → 어떤 키를 지워야 할지 모르니 booked_times 캐시 전체를 비움 (취소는 드문 작업이라 허용)
     @Override
     @Transactional
+    @CacheEvict(value = "booked_times", allEntries = true)
     public void cancelReservation(Long userId, Long reservationId) {
         Reservation reservation = reservationRepository.findById(reservationId)
                 .orElseThrow(() -> new IllegalArgumentException("예약을 찾을 수 없습니다"));
@@ -203,6 +215,8 @@ public class ReservationServiceImpl implements ReservationService {
         reservation.setStatus(Reservation.Status.CANCELLED);
         reservationRepository.save(reservation);
     }
+
+
 
     // 6. 미용사 예약 리스트 (예약 관리용)
     @Override
@@ -250,6 +264,8 @@ public class ReservationServiceImpl implements ReservationService {
         }
     }
 
+
+
     // 예약 목록 → reservationId:chatRoomId 맵 (N+1 방지용 배치 조회)
     private Map<Long, Long> buildChatRoomIdMap(List<Reservation> reservations) {
         if (reservations.isEmpty()) return Map.of();
@@ -259,7 +275,11 @@ public class ReservationServiceImpl implements ReservationService {
     }
 
     // 8. 특정 날짜 예약된 시간대 조회
+    // @Cacheable: 같은 미용사+날짜 조합은 30분간 Redis에서 바로 반환 (DB 조회 없음)
+    // 캐시 키 예) "booked_times::1:2026-05-10" → ["10:00","11:00"] 저장
+    // createReservation / cancelReservation 이 일어나면 해당 키를 삭제하므로 항상 최신 데이터
     @Override
+    @Cacheable(value = "booked_times", key = "#stylistId + ':' + #date")
     public List<String> getStylistBookedTimes(Long stylistId, String date) {
         LocalDate parsedDate = LocalDate.parse(date);
         LocalDateTime start = parsedDate.atStartOfDay();

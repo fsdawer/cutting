@@ -1,7 +1,12 @@
 package beauty.beauty.stylist.controller;
 
 import beauty.beauty.global.annotation.LoginUserId;
-import beauty.beauty.stylist.dto.*;
+import beauty.beauty.stylist.dto.ServiceRequest;
+import beauty.beauty.stylist.dto.ServiceResponse;
+import beauty.beauty.stylist.dto.StylistProfileResponse;
+import beauty.beauty.stylist.dto.UpdateStylistProfileRequest;
+import beauty.beauty.stylist.dto.WorkingHoursRequest;
+import beauty.beauty.stylist.dto.WorkingHoursResponse;
 import beauty.beauty.stylist.service.StylistService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -72,24 +77,6 @@ public class StylistController {
     }
 
 
-
-    // ── 포트폴리오 관리 ──────────────────────────────────────────
-
-    // POST   /api/stylists/me/portfolio             포트폴리오 이미지 업로드
-    @PostMapping("/me/portfolio")
-    public ResponseEntity<PortfolioResponse> addPortfolio(@LoginUserId Long userId,
-                                                          @RequestParam String imageUrl,
-                                                          @RequestParam(required = false) String caption) {
-        return ResponseEntity.ok(stylistService.addPortfolio(userId, imageUrl, caption));
-    }
-
-    // DELETE /api/stylists/me/portfolio/{portfolioId}  포트폴리오 삭제
-    @DeleteMapping("/me/portfolio/{portfolioId}")
-    public ResponseEntity<Void> deletePortfolio(@LoginUserId Long userId,
-                                                @PathVariable Long portfolioId) {
-        stylistService.deletePortfolio(userId, portfolioId);
-        return ResponseEntity.ok().build();
-    }
 
     // ── 영업시간 관리 ─────────────────────────────────────────────
 

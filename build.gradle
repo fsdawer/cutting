@@ -39,6 +39,10 @@ dependencies {
 	// WebSocket (채팅)
 	implementation 'org.springframework.boot:spring-boot-starter-websocket'
 
+	// Redis
+	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+	implementation 'org.springframework.boot:spring-boot-starter-cache'
+
 	// Mail (네이버 SMTP)
 	implementation 'org.springframework.boot:spring-boot-starter-mail'
 

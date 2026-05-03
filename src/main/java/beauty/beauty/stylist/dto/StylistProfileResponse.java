@@ -28,7 +28,6 @@ public class StylistProfileResponse {
 
     private List<ServiceResponse> services;
     private List<WorkingHoursResponse> workingHours;
-    private List<PortfolioResponse> portfolios;
 
     public static StylistProfileResponse from(StylistProfile profile) {
         Salon salon = profile.getSalon();
@@ -50,8 +49,7 @@ public class StylistProfileResponse {
 
     public static StylistProfileResponse fromWithDetails(StylistProfile profile,
                                               List<ServiceResponse> services,
-                                              List<WorkingHoursResponse> workingHours,
-                                              List<PortfolioResponse> portfolios) {
+                                              List<WorkingHoursResponse> workingHours) {
         Salon salon = profile.getSalon();
         return StylistProfileResponse.builder()
                 .id(profile.getId())
@@ -68,7 +66,6 @@ public class StylistProfileResponse {
                 .salonDescription(salon != null ? salon.getDescription() : null)
                 .services(services)
                 .workingHours(workingHours)
-                .portfolios(portfolios)
                 .build();
     }
 }

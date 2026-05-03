@@ -4,11 +4,14 @@ import beauty.beauty.chat.entity.Message;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Getter;
+import tools.jackson.databind.annotation.JsonDeserialize;
+import tools.jackson.databind.annotation.JsonPOJOBuilder;
 
 import java.time.LocalDateTime;
 
 @Getter
 @Builder
+@JsonDeserialize(builder = MessageResponse.MessageResponseBuilder.class)
 public class MessageResponse {
     private Long id;
     private Long roomId;
@@ -19,6 +22,9 @@ public class MessageResponse {
     @JsonProperty("isRead")
     private boolean isRead;
     private LocalDateTime createdAt;
+
+    @JsonPOJOBuilder(withPrefix = "")
+    public static class MessageResponseBuilder {}
 
     public static MessageResponse from(Message message) {
         return MessageResponse.builder()

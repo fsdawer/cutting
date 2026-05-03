@@ -3,7 +3,8 @@
 ## 기술 스택
 - **Backend**: Spring Boot 4.0.3 / Java 17 / JPA + MySQL
 - **Frontend**: Vue.js 3 (Vite) + Pinia + Vue Router
-- **Auth**: JWT (`io.jsonwebtoken:jjwt 0.12.6`) + Spring Security + OAuth2 (Google)
+- **Auth**: JWT (`io.jsonwebtoken:jjwt 0.12.6`) + Spring Security + OAuth2 (Kakao/Naver)
+- **Cache/Pub-Sub**: Redis (Spring Data Redis 4.0.3 + Spring Cache)
 - **외부 API**: 토스페이먼츠 v2, 네이버 SMTP
 - **기타**: WebSocket(채팅), spring-dotenv(환경변수), Lombok
 
@@ -18,6 +19,11 @@ beauty/
 ├── gradlew / gradlew.bat
 ├── .env                          # 절대 커밋 금지 (.gitignore 처리됨)
 ├── sql/                          # DDL/초기 데이터 SQL 스크립트
+├── k6/                           # 부하 테스트 스크립트
+│   ├── test_stylist_detail.js    # 스타일리스트 상세 조회 (before/after 캐시)
+│   ├── test_stylist_cache.js     # 스타일리스트 목록+상세 캐시 효과 측정
+│   ├── test_distributed_lock.js  # 동시 예약 race condition (before/after 분산락)
+│   └── test_image_upload.js      # 이미지 업로드 동시성 테스트
 │
 ├── src/
 │   ├── main/
@@ -27,16 +33,21 @@ beauty/
 │   │   │   │   ├── controller/AuthController.java
 │   │   │   │   ├── service/
 │   │   │   │   │   ├── AuthService.java
-│   │   │   │   │   ├── AuthServiceImpl.java
+│   │   │   │   │   ├── AuthServiceImpl.java        # logout 시 access token 블랙리스트 등록
 │   │   │   │   │   └── CustomOAuth2UserService.java
 │   │   │   │   └── dto/
 │   │   │   │       ├── RegisterRequest.java
 │   │   │   │       ├── LoginRequest.java
-│   │   │   │       ├── EmailRequest.java
 │   │   │   │       └── TokenResponse.java
 │   │   │   ├── chat/
 │   │   │   │   ├── controller/ChatController.java
-│   │   │   │   ├── service/ChatService.java
+│   │   │   │   ├── service/
+│   │   │   │   │   ├── ChatService.java
+│   │   │   │   │   └── ChatServiceImpl.java        # sendMessage → Redis Pub/Sub, getMyRooms @Cacheable
+│   │   │   │   ├── dto/
+│   │   │   │   │   ├── ChatRoomResponse.java
+│   │   │   │   │   ├── MessageResponse.java        # @JsonDeserialize(builder=) for Redis 역직렬화
+│   │   │   │   │   └── SendMessageRequest.java
 │   │   │   │   ├── entity/
 │   │   │   │   │   ├── ChatRoom.java
 │   │   │   │   │   └── Message.java
@@ -46,6 +57,7 @@ beauty/
 │   │   │   ├── global/
 │   │   │   │   ├── annotation/LoginUserId.java       # 컨트롤러 파라미터 리졸버용
 │   │   │   │   ├── config/
+│   │   │   │   │   ├── RedisConfig.java              # CacheManager, RedisTemplate, MessageListenerContainer
 │   │   │   │   │   ├── SecurityConfig.java
 │   │   │   │   │   ├── WebConfig.java
 │   │   │   │   │   └── WebSocketConfig.java
@@ -53,10 +65,15 @@ beauty/
 │   │   │   │   │   ├── CustomException.java
 │   │   │   │   │   ├── ErrorCode.java
 │   │   │   │   │   └── GlobalExceptionHandler.java
+│   │   │   │   ├── filter/
+│   │   │   │   │   └── RateLimitFilter.java          # /api/auth/login IP당 1분 10회 제한
 │   │   │   │   ├── jwt/
-│   │   │   │   │   ├── JwtAuthFilter.java
+│   │   │   │   │   ├── JwtAuthFilter.java            # 블랙리스트 체크 포함
 │   │   │   │   │   └── JwtUtil.java
 │   │   │   │   ├── oauth2/OAuth2SuccessHandler.java
+│   │   │   │   ├── redis/
+│   │   │   │   │   ├── TokenBlacklistService.java    # Redis SET TTL로 access token 무효화
+│   │   │   │   │   └── RedisMessageSubscriber.java   # chat:room:* 구독 → STOMP 브로드캐스트
 │   │   │   │   └── resolver/LoginUserIdResolver.java
 │   │   │   ├── payment/
 │   │   │   │   ├── controller/PaymentController.java
@@ -76,7 +93,7 @@ beauty/
 │   │   │   │   ├── controller/ReservationController.java
 │   │   │   │   ├── service/
 │   │   │   │   │   ├── ReservationService.java
-│   │   │   │   │   └── ReservationServiceImpl.java
+│   │   │   │   │   └── ReservationServiceImpl.java   # getStylistBookedTimes @Cacheable(booked_times 30분)
 │   │   │   │   ├── entity/
 │   │   │   │   │   ├── Reservation.java              # status/createdAt에 @Builder.Default 적용
 │   │   │   │   │   └── ReservationImage.java
@@ -97,39 +114,32 @@ beauty/
 │   │   │   │   ├── entity/
 │   │   │   │   │   ├── StylistProfile.java
 │   │   │   │   │   ├── StylistServiceItem.java
-│   │   │   │   │   ├── OperatingHours.java
-│   │   │   │   │   └── Portfolio.java
+│   │   │   │   │   └── OperatingHours.java
 │   │   │   │   ├── repository/
 │   │   │   │   │   ├── StylistProfileRepository.java
 │   │   │   │   │   ├── StylistServiceRepository.java
-│   │   │   │   │   ├── OperatingHoursRepository.java
-│   │   │   │   │   └── PortfolioRepository.java
+│   │   │   │   │   └── OperatingHoursRepository.java
 │   │   │   │   └── dto/
 │   │   │   │       ├── StylistProfileResponse.java
 │   │   │   │       ├── ServiceRequest.java
 │   │   │   │       ├── ServiceResponse.java
 │   │   │   │       ├── WorkingHoursRequest.java
 │   │   │   │       ├── WorkingHoursResponse.java
-│   │   │   │       ├── PortfolioResponse.java
 │   │   │   │       └── UpdateStylistProfileRequest.java
 │   │   │   └── user/
 │   │   │       ├── controller/UserController.java
 │   │   │       ├── service/
 │   │   │       │   ├── UserService.java
 │   │   │       │   └── UserServiceImpl.java
-│   │   │       ├── entity/
-│   │   │       │   ├── User.java
-│   │   │       │   └── EmailVerification.java
-│   │   │       ├── repository/
-│   │   │       │   ├── UserRepository.java
-│   │   │       │   └── EmailVerificationRepository.java
+│   │   │       ├── entity/User.java
+│   │   │       ├── repository/UserRepository.java
 │   │   │       └── dto/
 │   │   │           ├── UserResponse.java
 │   │   │           ├── UpdateUserRequest.java
 │   │   │           ├── ChangePasswordRequest.java
 │   │   │           └── UpgradeToStylistRequest.java
 │   │   └── resources/
-│   │       └── application.properties
+│   │       └── application.yaml
 │   └── test/
 │       └── java/beauty/beauty/
 │           ├── BeautyApplicationTests.java
@@ -145,7 +155,7 @@ beauty/
         ├── style.css
         ├── assets/main.css
         ├── api/
-        │   ├── index.js          # axios 인스턴스 + 공통 인터셉터
+        │   ├── index.js          # axios 인스턴스 + 공통 인터셉터 (토큰 자동 주입, 401 refresh)
         │   ├── auth.js
         │   ├── user.js
         │   ├── stylist.js
@@ -178,6 +188,9 @@ beauty/
 ## 빌드 & 테스트
 
 ```bash
+# Redis 실행 (앱 실행 전 필수)
+brew services start redis
+
 # Backend (루트에서)
 ./gradlew build          # 빌드 + 테스트
 ./gradlew test           # 테스트만
@@ -187,7 +200,22 @@ beauty/
 npm install
 npm run dev              # 개발 서버 실행 (포트 5173)
 npm run build            # 프로덕션 빌드
+
+# k6 부하 테스트 (루트에서)
+k6 run k6/test_stylist_detail.js
+k6 run -e STYLIST_IDS=1,2,3 k6/test_stylist_cache.js
+k6 run -e TOKEN="Bearer eyJ..." -e STYLIST_ID=1 -e SERVICE_ID=1 k6/test_distributed_lock.js
 ```
+
+## Redis 사용 현황
+
+| 용도 | 키 패턴 | TTL | 위치 |
+|---|---|---|---|
+| JWT 블랙리스트 | `blacklist:{token}` | 토큰 잔여 유효시간 | `TokenBlacklistService` |
+| 예약 시간대 캐시 | `booked_times::{stylistId}:{date}` | 30분 | `ReservationServiceImpl` |
+| 채팅방 목록 캐시 | `chat_rooms::{userId}` | 1분 | `ChatServiceImpl` |
+| 채팅 Pub/Sub | `chat:room:{roomId}` | - | `ChatServiceImpl` → `RedisMessageSubscriber` |
+| 로그인 rate limit | `rate:login:{ip}` | 1분 | `RateLimitFilter` |
 
 ## 도메인 요약
 
@@ -201,10 +229,12 @@ npm run build            # 프로덕션 빌드
 ### 예약 (reservation)
 - `Reservation`은 `User`, `StylistServiceItem` 참조
 - `totalPrice` 필드가 결제 금액 기준
+- 예약 확정 시 채팅방 자동 생성 (`ChatServiceImpl.createRoomForReservation`)
 
 ### 인증
 - 컨트롤러에서 `@LoginUserId Long userId`로 현재 로그인 유저 ID 주입
 - JWT 토큰은 HTTP Authorization 헤더로 전달
+- 로그아웃 시 access token을 Redis 블랙리스트에 등록 → 만료 전 토큰 무효화
 
 ## 예외 처리 컨벤션
 - `CustomException(ErrorCode)` → `GlobalExceptionHandler` → `{code, message}` JSON
@@ -223,6 +253,7 @@ npm run build            # 프로덕션 빌드
 
 ## 환경변수 (.env) — 커밋 금지
 - `toss.secret-key` → 토스페이먼츠 시크릿 키
+- `REDIS_HOST`, `REDIS_PORT` → Redis 연결 (기본값: localhost:6379)
 - DB, JWT, OAuth2, SMTP 설정 포함
 - `spring-dotenv` 라이브러리로 `.env` → Spring 환경변수 자동 주입
 
@@ -233,3 +264,7 @@ npm run build            # 프로덕션 빌드
 - 결제 위젯 플로우: `prepare()` → 토스 SDK `renderPaymentMethods` → `requestPayment()` → 리다이렉트 → `/payment/success` 또는 `/payment/fail`
 - SDK 없는 개발환경: prepare 후 mock paymentKey로 confirm 직접 호출
 - `getMyPayments`: `reservationRepository.findByUserId` → `paymentRepository.findByReservationIdIn` 2-query 패턴
+- **Jackson 3.x**: Spring Boot 4.0.3은 `tools.jackson.*` 패키지 사용 (`com.fasterxml.jackson.databind.*` 아님)
+  - `ObjectMapper` → `tools.jackson.databind.ObjectMapper`
+  - `GenericJackson2JsonRedisSerializer` → `GenericJacksonJsonRedisSerializer`
+  - `@Jacksonized` 사용 불가 → `@JsonDeserialize(builder=...)` + `@JsonPOJOBuilder` 직접 사용

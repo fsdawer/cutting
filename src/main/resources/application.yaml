@@ -37,6 +37,12 @@ spring:
           ssl:
             enable: true
 
+  # ── Redis ────────────────────────────────────────────
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
   ## ── OAuth2 소셜 로그인 ────────────────────────────────
   security:
     oauth2:

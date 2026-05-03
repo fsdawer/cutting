@@ -82,7 +82,7 @@ async function handleRegister() {
       name:     form.value.name,
       role:     'USER',
     })
-    alert('회원가입 성공! 이메일 인증 후 로그인하세요.')
+    alert('회원가입이 완료되었습니다! 로그인해주세요.')
     router.push('/login')
   } catch (e) {
     errorMsg.value = e.response?.data?.message || '회원가입 중 오류가 발생했습니다.'

@@ -117,23 +117,6 @@
             </div>
           </div>
 
-          <!-- 포트폴리오 -->
-          <div v-if="activeSection === 'portfolio'" class="card">
-            <h2 class="manage-title">포트폴리오</h2>
-            <p class="manage-desc">작업물 이미지 URL을 입력해 포트폴리오를 등록하세요.</p>
-            <div class="portfolio-add">
-              <input v-model="newPortfolioUrl" class="form-input" placeholder="이미지 URL (https://...)" />
-              <input v-model="newPortfolioCaption" class="form-input" placeholder="설명 (선택)" style="max-width:180px" />
-              <button class="btn btn-primary" @click="addPortfolioItem">추가</button>
-            </div>
-            <div class="portfolio-grid" style="margin-top:20px">
-              <div v-for="item in portfolios" :key="item.id" class="port-item">
-                <img v-if="item.imageUrl" :src="item.imageUrl" :alt="item.caption" />
-                <div v-else class="port-placeholder">{{ item.caption || '이미지' }}</div>
-                <button class="rm-port" @click="removePortfolio(item.id)">×</button>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>
@@ -149,7 +132,6 @@ const sections = [
   { id: 'basic', icon: '👤', label: '기본 정보' },
   { id: 'hours', icon: '🕐', label: '영업시간' },
   { id: 'services', icon: '💇', label: '서비스 & 가격' },
-  { id: 'portfolio', icon: '🖼️', label: '포트폴리오' },
 ]
 
 // ── 기본 정보 ────────────────────────────────────────────────
@@ -178,11 +160,6 @@ const svcSuccess = ref(false)
 const svcSaving = ref(false)
 const deletedServiceIds = ref([])
 
-// ── 포트폴리오 ────────────────────────────────────────────────
-const portfolios = ref([])
-const newPortfolioUrl = ref('')
-const newPortfolioCaption = ref('')
-
 onMounted(async () => {
   try {
     const res = await stylistApi.getMyProfile()
@@ -197,7 +174,6 @@ onMounted(async () => {
       profileImg:       data.profileImg        || '',
     }
     services.value = (data.services || []).map(s => ({ ...s, isNew: false }))
-    portfolios.value = data.portfolios || []
 
     if (data.workingHours?.length) {
       data.workingHours.forEach(wh => {
@@ -306,27 +282,6 @@ function removeService(idx, svc) {
   services.value.splice(idx, 1)
 }
 
-async function addPortfolioItem() {
-  if (!newPortfolioUrl.value) return
-  try {
-    const res = await stylistApi.addPortfolio(newPortfolioUrl.value, newPortfolioCaption.value || null)
-    portfolios.value.push(res.data)
-    newPortfolioUrl.value = ''
-    newPortfolioCaption.value = ''
-  } catch (e) {
-    alert(e.response?.data?.message || '포트폴리오 추가 실패')
-  }
-}
-
-async function removePortfolio(id) {
-  if (!confirm('포트폴리오를 삭제하시겠습니까?')) return
-  try {
-    await stylistApi.deletePortfolio(id)
-    portfolios.value = portfolios.value.filter(p => p.id !== id)
-  } catch (e) {
-    alert(e.response?.data?.message || '삭제 실패')
-  }
-}
 </script>
 
 <style scoped>
@@ -375,17 +330,6 @@ async function removePortfolio(id) {
 }
 .icon-btn.danger { color: var(--color-danger); border-color: var(--color-danger); }
 
-.portfolio-add { display: flex; gap: 10px; align-items: center; }
-.portfolio-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-.port-item { position: relative; aspect-ratio: 1; border-radius: var(--radius-md); overflow: hidden; background: var(--color-bg-surface); }
-.port-item img { width: 100%; height: 100%; object-fit: cover; }
-.port-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--color-text-muted); }
-.rm-port {
-  position: absolute; top: 4px; right: 4px;
-  width: 22px; height: 22px; border-radius: 50%;
-  background: rgba(0,0,0,0.7); color: white; font-size: 14px;
-  border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;
-}
 
 .save-row { display: flex; justify-content: flex-end; margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--color-border); }
 .success-msg { color: var(--color-success, #4ade80); font-size: 13px; margin-bottom: 8px; }
@@ -396,7 +340,5 @@ async function removePortfolio(id) {
   .manage-nav { flex-direction: row; overflow-x: auto; position: static; }
   .form-grid { grid-template-columns: 1fr; }
   .svc-row { grid-template-columns: 1fr 1fr; }
-  .portfolio-grid { grid-template-columns: repeat(3, 1fr); }
-  .portfolio-add { flex-wrap: wrap; }
 }
 </style>

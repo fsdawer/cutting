@@ -24,15 +24,6 @@ export const stylistApi = {
   /** DELETE /api/stylists/me/services/{id} — 서비스 삭제 */
   deleteService: (serviceId) => api.delete(`/api/stylists/me/services/${serviceId}`),
 
-  // ── 포트폴리오 관리 ──────────────────────────────────────────
-
-  /** POST /api/stylists/me/portfolio — 포트폴리오 추가 */
-  addPortfolio: (imageUrl, caption) =>
-    api.post('/api/stylists/me/portfolio', null, { params: { imageUrl, caption } }),
-
-  /** DELETE /api/stylists/me/portfolio/{id} — 포트폴리오 삭제 */
-  deletePortfolio: (portfolioId) => api.delete(`/api/stylists/me/portfolio/${portfolioId}`),
-
   // ── 영업시간 관리 ─────────────────────────────────────────────
 
   /** PUT /api/stylists/me/hours — 영업시간 수정 (요일 하나 단위) */

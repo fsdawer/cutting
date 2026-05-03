@@ -29,6 +29,10 @@
         <div v-if="currentStep === 0" class="card step-card">
           <h2 class="step-title">날짜 &amp; 시간 선택</h2>
 
+          <div v-if="!stylist.workingHours?.length" class="no-hours-notice">
+            이 미용사는 아직 영업시간을 설정하지 않았습니다. 예약이 불가능합니다.
+          </div>
+
           <div class="calendar">
             <div class="cal-nav">
               <button class="cal-nav-btn" @click="prevMonth">‹</button>
@@ -315,7 +319,7 @@ function isPast(day) {
   return d < t
 }
 function isClosedDay(day) {
-  if (!stylist.value.workingHours?.length) return false
+  if (!stylist.value.workingHours?.length) return true  // 영업시간 미설정 → 모든 날 비활성화
   const d = new Date(currentYear.value, currentMonth.value, day)
   const jsDay = d.getDay()
   const backendDay = jsDay === 0 ? 6 : jsDay - 1
@@ -722,6 +726,16 @@ async function submitReservation() {
   cursor: pointer;
 }
 .upload-hint { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+
+.no-hours-notice {
+  background: #fff8e1;
+  border: 1px solid #ffe082;
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  font-size: 13px;
+  color: #795548;
+  margin-bottom: 20px;
+}
 
 .loading-center { text-align: center; padding: 40px; }
 

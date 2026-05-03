@@ -108,4 +108,11 @@ public class JwtUtil {
     public Long getUserId(String token) {
         return Long.parseLong(getClaims(token).getSubject());
     }
+
+    /**
+     * 토큰의 남은 유효 시간(ms) 반환.
+     */
+    public long getExpiration(String token) {
+        return getClaims(token).getExpiration().getTime() - System.currentTimeMillis();
+    }
 }

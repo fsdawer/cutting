@@ -78,20 +78,8 @@
               </div>
             </div>
 
-            <div class="card content-card" v-if="portfolios.length">
-              <h2 class="content-title">포트폴리오</h2>
-              <div class="portfolio-grid">
-                <div v-for="item in portfolios" :key="item.id" class="portfolio-item">
-                  <img v-if="item.imageUrl" :src="item.imageUrl" :alt="item.caption" class="portfolio-img" />
-                  <div v-else class="portfolio-empty">
-                    <span>{{ item.caption || '사진' }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="card content-card" v-if="!services.length && !portfolios.length">
-              <p class="no-content">아직 등록된 서비스나 포트폴리오가 없습니다.</p>
+            <div class="card content-card" v-if="!services.length">
+              <p class="no-content">아직 등록된 서비스가 없습니다.</p>
             </div>
 
             <!-- 리뷰 탭 -->
@@ -195,7 +183,6 @@ const loading  = ref(true)
 const error    = ref('')
 const stylist  = ref({})
 const services = ref([])
-const portfolios   = ref([])
 const workingHours = ref([])
 
 // 리뷰
@@ -285,7 +272,6 @@ onMounted(async () => {
     const data = profileRes.data
     stylist.value      = data
     services.value     = data.services ?? []
-    portfolios.value   = data.portfolios ?? []
     workingHours.value = (data.workingHours ?? []).sort((a, b) => a.dayOfWeek - b.dayOfWeek)
   } catch (e) {
     error.value = '스타일리스트 정보를 불러오지 못했습니다.'
@@ -364,12 +350,6 @@ onMounted(async () => {
 .svc-desc  { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
 .svc-price { font-size: 15px; font-weight: 700; color: var(--primary); white-space: nowrap; margin-left: 16px; }
 
-.portfolio-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.portfolio-item { aspect-ratio: 1; border-radius: var(--radius-sm); overflow: hidden; background: var(--bg); }
-.portfolio-img  { width: 100%; height: 100%; object-fit: cover; }
-.portfolio-empty { width: 100%; height: 100%; display: flex; align-items: flex-end; padding: 8px; }
-.portfolio-empty span { font-size: 11px; color: var(--text-muted); }
-
 /* Reviews */
 .review-count-badge {
   display: inline-flex; align-items: center; justify-content: center;
@@ -431,6 +411,5 @@ onMounted(async () => {
 
 @media (max-width: 768px) {
   .detail-layout { grid-template-columns: 1fr; }
-  .portfolio-grid { grid-template-columns: repeat(2, 1fr); }
 }
 </style>

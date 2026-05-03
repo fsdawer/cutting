@@ -1,6 +1,5 @@
 package beauty.beauty.stylist.service;
 
-import beauty.beauty.stylist.dto.PortfolioResponse;
 import beauty.beauty.stylist.dto.ServiceRequest;
 import beauty.beauty.stylist.dto.ServiceResponse;
 import beauty.beauty.stylist.dto.StylistProfileResponse;
@@ -24,10 +23,6 @@ public interface StylistService {
     ServiceResponse updateService(Long userId, Long serviceId, ServiceRequest request);
 
     void deleteService(Long userId, Long serviceId);
-
-    PortfolioResponse addPortfolio(Long userId, String imageUrl, String caption);
-
-    void deletePortfolio(Long userId, Long portfolioId);
 
     WorkingHoursResponse updateHours(Long userId, WorkingHoursRequest request);
 }
