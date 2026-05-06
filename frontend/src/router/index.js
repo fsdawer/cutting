@@ -20,6 +20,11 @@ const routes = [
     component: () => import('@/views/RegisterView.vue'),
     meta: { guestOnly: true },
   },
+  {
+    path: '/ranking',
+    name: 'Ranking',
+    component: () => import('@/views/RankingView.vue'),
+  },
   // 주의: /stylist/me, /stylist/manage, /stylist/reservations 등 정적 경로를 /:id 보다 먼저 선언
   {
     path: '/stylist/manage',

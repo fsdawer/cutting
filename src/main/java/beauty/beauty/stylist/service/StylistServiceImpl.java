@@ -9,14 +9,23 @@ import beauty.beauty.stylist.repository.OperatingHoursRepository;
 import beauty.beauty.stylist.repository.SalonRepository;
 import beauty.beauty.stylist.repository.StylistProfileRepository;
 import beauty.beauty.stylist.repository.StylistServiceRepository;
+import beauty.beauty.global.kakao.KakaoGeocodingService;
+import org.locationtech.jts.geom.Coordinate;
+import org.locationtech.jts.geom.GeometryFactory;
+import org.locationtech.jts.geom.PrecisionModel;
 import org.springframework.transaction.annotation.Transactional;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class StylistServiceImpl implements StylistService {
@@ -25,6 +34,9 @@ public class StylistServiceImpl implements StylistService {
     private final StylistServiceRepository stylistServiceRepository;
     private final OperatingHoursRepository operatingHoursRepository;
     private final SalonRepository salonRepository;
+    private final KakaoGeocodingService kakaoGeocodingService;
+
+    private static final GeometryFactory GEO_FACTORY = new GeometryFactory(new PrecisionModel(), 4326);
 
     @Override
     public List<StylistProfileResponse> getStylists(String keyword, String location) {
@@ -88,11 +100,34 @@ public class StylistServiceImpl implements StylistService {
             profile.setSalon(salon);
         }
         if (request.getSalonName() != null) salon.setName(request.getSalonName());
-        if (request.getLocation() != null) salon.setAddress(request.getLocation());
+        if (request.getLocation() != null) {
+            salon.setAddress(request.getLocation());
+            double[] coords = kakaoGeocodingService.geocode(request.getLocation());
+            if (coords != null) {
+                // JTS Coordinate(x, y) = (longitude, latitude)
+                salon.setLocation(GEO_FACTORY.createPoint(new Coordinate(coords[1], coords[0])));
+            }
+        }
         if (request.getSalonPhone() != null) salon.setPhone(request.getSalonPhone());
         if (request.getSalonDescription() != null) salon.setDescription(request.getSalonDescription());
 
         return StylistProfileResponse.from(profile);
+    }
+
+    @Override
+    public List<StylistProfileResponse> getNearbyStylists(double lat, double lng, int radius) {
+        List<Long> ids = stylistProfileRepository.findNearbyIds(lat, lng, radius);
+        if (ids.isEmpty()) return List.of();
+
+        Map<Long, StylistProfile> profileMap = stylistProfileRepository.findByIdIn(ids)
+                .stream().collect(Collectors.toMap(StylistProfile::getId, Function.identity()));
+
+        // 거리 순서 유지
+        return ids.stream()
+                .map(profileMap::get)
+                .filter(Objects::nonNull)
+                .map(StylistProfileResponse::from)
+                .collect(Collectors.toList());
     }
 
     @Override

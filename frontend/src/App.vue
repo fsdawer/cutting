@@ -11,11 +11,27 @@
 </template>
 
 <script setup>
+import { watch } from 'vue'
 import Navbar from '@/components/Navbar.vue'
 import ChatWidget from '@/components/ChatWidget.vue'
 import { useAuthStore } from '@/stores/authStore'
+import { useNotificationStore } from '@/stores/notificationStore'
 
 const auth = useAuthStore()
+const notif = useNotificationStore()
+
+watch(
+  () => auth.isLoggedIn,
+  (loggedIn) => {
+    if (loggedIn && auth.user?.id && auth.token) {
+      notif.connect(auth.user.id, auth.token)
+    } else {
+      notif.disconnect()
+      notif.clearAll()
+    }
+  },
+  { immediate: true }
+)
 </script>
 
 <style scoped>

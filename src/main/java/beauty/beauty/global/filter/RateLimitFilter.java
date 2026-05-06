@@ -17,9 +17,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     private final StringRedisTemplate stringRedisTemplate;
 
-    private static final String  TARGET_PATH  = "/api/auth/login";
-    private static final int     MAX_REQUESTS = 10;
-    private static final Duration WINDOW      = Duration.ofMinutes(1);
+    private final int maxRequests;
+
+    private static final String  TARGET_PATH = "/api/auth/login";
+    private static final Duration WINDOW     = Duration.ofMinutes(1);
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
@@ -37,7 +38,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
             stringRedisTemplate.expire(key, WINDOW);
         }
 
-        if (count != null && count > MAX_REQUESTS) {
+        if (count != null && count > maxRequests) {
             response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
             response.setContentType("application/json;charset=UTF-8");
             response.getWriter().write(

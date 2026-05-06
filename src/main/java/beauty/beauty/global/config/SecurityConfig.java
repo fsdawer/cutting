@@ -8,6 +8,7 @@ import beauty.beauty.global.oauth2.OAuth2SuccessHandler;
 import beauty.beauty.global.redis.TokenBlacklistService;
 import beauty.beauty.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -38,6 +39,9 @@ public class SecurityConfig {
     private final TokenBlacklistService tokenBlacklistService;
     private final StringRedisTemplate stringRedisTemplate;
 
+    @Value("${rate-limit.login.max-requests:10}")
+    private int loginRateLimit;
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         return http
@@ -47,6 +51,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/stylists", "/api/stylists/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/ranking").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/reviews/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/payments/cancel-pending").permitAll()
                         .requestMatchers("/login/oauth2/**", "/oauth2/**").permitAll()
@@ -57,7 +62,7 @@ public class SecurityConfig {
                         .userInfoEndpoint(u -> u.userService(customOAuth2UserService))
                         .successHandler(oAuth2SuccessHandler)
                 )
-                .addFilterBefore(new RateLimitFilter(stringRedisTemplate),
+                .addFilterBefore(new RateLimitFilter(stringRedisTemplate, loginRateLimit),
                         UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(new JwtAuthFilter(jwtUtil, userRepository, tokenBlacklistService),
                         UsernamePasswordAuthenticationFilter.class)

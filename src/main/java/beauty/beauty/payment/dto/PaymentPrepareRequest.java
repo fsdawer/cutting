@@ -2,11 +2,12 @@ package beauty.beauty.payment.dto;
 
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Getter
+@Setter
 @NoArgsConstructor
 public class PaymentPrepareRequest {
 
-    // 결제할 예약 ID
     private Long reservationId;
 }

@@ -1,748 +1,585 @@
 <template>
   <main class="page">
     <div class="container">
-      <!-- Header -->
-      <div class="page-header">
-        <button class="back-btn" @click="$router.back()">
-          <span>←</span> 뒤로가기
-        </button>
-        <div>
-          <h1 class="section-title">예약하기</h1>
-          <p class="section-subtitle" v-if="stylist.name">{{ stylist.name }} · {{ stylist.salonName }}</p>
-        </div>
-      </div>
+      <button class="back-link" @click="$router.back()">← 뒤로가기</button>
 
-      <!-- Step Indicator -->
-      <div class="steps">
-        <div v-for="(step, i) in steps" :key="i" class="step-item" :class="{ active: currentStep === i, done: currentStep > i }">
-          <div class="step-dot">
-            <span v-if="currentStep > i">✓</span>
-            <span v-else>{{ i + 1 }}</span>
-          </div>
-          <span class="step-label">{{ step }}</span>
-          <div v-if="i < steps.length - 1" class="step-line"></div>
-        </div>
-      </div>
+      <div class="booking-grid">
 
-      <div class="booking-body">
-        <!-- Step 1: 날짜/시간 -->
-        <div v-if="currentStep === 0" class="card step-card">
-          <h2 class="step-title">날짜 &amp; 시간 선택</h2>
+        <!-- ──────────── 메인 콘텐츠 ──────────── -->
+        <div class="booking-main">
 
-          <div v-if="!stylist.workingHours?.length" class="no-hours-notice">
-            이 미용사는 아직 영업시간을 설정하지 않았습니다. 예약이 불가능합니다.
-          </div>
+          <!-- 섹션 1: 날짜 & 시간 -->
+          <section class="card booking-section" id="sec-datetime">
+            <div class="section-badge">1</div>
+            <h2 class="section-title">날짜 &amp; 시간 선택</h2>
 
-          <div class="calendar">
-            <div class="cal-nav">
-              <button class="cal-nav-btn" @click="prevMonth">‹</button>
-              <span class="cal-month">{{ currentYear }}년 {{ currentMonth + 1 }}월</span>
-              <button class="cal-nav-btn" @click="nextMonth">›</button>
-            </div>
-            <div class="cal-head">
-              <span v-for="d in ['일','월','화','수','목','금','토']" :key="d">{{ d }}</span>
-            </div>
-            <div class="cal-grid">
-              <span v-for="b in startDay" :key="'b'+b" class="cal-empty"></span>
-              <button
-                v-for="day in daysInMonth"
-                :key="day"
-                class="cal-day"
-                :class="{
-                  selected: selectedDate === day,
-                  today: isToday(day),
-                  past: isPast(day),
-                  closed: !isPast(day) && isClosedDay(day)
-                }"
-                :disabled="isPast(day) || isClosedDay(day)"
-                @click="selectedDate = day"
-              >{{ day }}</button>
-            </div>
-          </div>
-
-          <div v-if="selectedDate" class="time-section">
-            <h3 class="time-title">시간 선택</h3>
-            <div v-if="timeSlots.length === 0" class="no-slots">해당 날짜는 영업하지 않습니다.</div>
-            <div v-else class="time-grid">
-              <button
-                v-for="slot in timeSlots"
-                :key="slot.time"
-                class="time-slot"
-                :class="{ selected: selectedTime === slot.time, booked: slot.booked }"
-                :disabled="slot.booked"
-                @click="!slot.booked && (selectedTime = slot.time)"
-              >{{ slot.time }}</button>
-            </div>
-          </div>
-
-          <div class="step-footer">
-            <button
-              class="btn btn-primary btn-lg btn-full"
-              :disabled="!selectedDate || !selectedTime"
-              @click="currentStep++"
-            >다음 단계</button>
-          </div>
-        </div>
-
-        <!-- Step 2: 서비스 -->
-        <div v-if="currentStep === 1" class="card step-card">
-          <h2 class="step-title">서비스 선택</h2>
-
-          <div v-if="servicesLoading" class="loading-center">
-            <div class="spinner"></div>
-          </div>
-          <div v-else>
-            <div v-for="(list, cat) in groupedServices" :key="cat" class="service-group">
-              <h4 class="service-cat">{{ cat }}</h4>
-              <div class="service-list">
+            <div class="calendar-section">
+              <div class="cal-header">
+                <button class="cal-nav" @click="prevMonth">←</button>
+                <span class="cal-month">{{ calYear }}년 {{ calMonth + 1 }}월</span>
+                <button class="cal-nav" @click="nextMonth">→</button>
+              </div>
+              <div class="cal-grid">
+                <span v-for="d in ['일','월','화','수','목','금','토']" :key="d" class="cal-dow">{{ d }}</span>
+                <span v-for="blank in startBlank" :key="'b'+blank" class="cal-day empty"></span>
                 <button
-                  v-for="s in list"
-                  :key="s.id"
-                  class="service-item"
-                  :class="{ selected: selectedService?.id === s.id }"
-                  @click="selectedService = s"
+                  v-for="day in daysInMonth"
+                  :key="day"
+                  class="cal-day"
+                  :class="{ selected: isSelectedDate(day), today: isTodayDate(day), disabled: isPastDate(day) }"
+                  :disabled="isPastDate(day)"
+                  @click="selectDate(day)"
+                >{{ day }}</button>
+              </div>
+            </div>
+
+            <div v-if="selectedDate" class="time-section">
+              <h3 class="sub-title">시간 선택</h3>
+              <div v-if="slotsLoading" class="slots-loading"><div class="spinner" style="width:22px;height:22px;border-width:2px"></div></div>
+              <div v-else class="time-grid">
+                <button
+                  v-for="slot in timeSlots"
+                  :key="slot.time"
+                  class="time-slot"
+                  :class="{ selected: selectedTime === slot.time, booked: slot.booked }"
+                  @click="slot.booked ? openWaitingModal(slot.time) : (selectedTime = slot.time)"
                 >
-                  <div class="si-info">
-                    <span class="si-name">{{ s.name }}</span>
-                    <span class="si-desc" v-if="s.description">{{ s.description }}</span>
-                  </div>
-                  <span class="si-price">{{ s.price?.toLocaleString() }}원</span>
+                  {{ slot.time }}
+                  <span v-if="slot.booked" class="slot-booked-label">마감</span>
                 </button>
               </div>
-            </div>
-            <p v-if="!services.length" class="no-service">등록된 서비스가 없습니다.</p>
-
-            <div class="form-group" style="margin-top: 20px;">
-              <label class="form-label">요구사항 (선택)</label>
-              <textarea
-                v-model="requestText"
-                class="form-input"
-                rows="3"
-                placeholder="원하시는 스타일, 참고사항 등을 적어주세요"
-              ></textarea>
+              <p class="slot-hint">마감된 시간을 클릭하면 빈자리 알림을 신청할 수 있습니다</p>
             </div>
 
-            <div class="form-group" style="margin-top: 16px;">
-              <label class="form-label">참고 이미지 (선택, 최대 5장)</label>
-              <label class="image-upload-label">
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  style="display:none"
-                  @change="handleImageChange"
-                />
-                <span class="upload-btn">📎 이미지 첨부</span>
+            <Transition name="toast">
+              <div v-if="waitingSuccess" class="waiting-toast">{{ waitingSuccess }}</div>
+            </Transition>
+
+            <div v-if="selectedDate && selectedTime" class="done-badge">
+              ✓ {{ selectedDate }} {{ selectedTime }} 선택됨
+            </div>
+          </section>
+
+          <!-- 섹션 2: 서비스 선택 -->
+          <section class="card booking-section" id="sec-service">
+            <div class="section-badge">2</div>
+            <h2 class="section-title">서비스 선택</h2>
+
+            <div v-if="services.length === 0" class="state-center">
+              <p class="state-text">등록된 서비스가 없습니다.</p>
+            </div>
+            <div v-else class="service-list">
+              <label
+                v-for="svc in services"
+                :key="svc.id"
+                class="svc-option"
+                :class="{ selected: selectedServiceId === svc.id }"
+              >
+                <input type="radio" :value="svc.id" v-model="selectedServiceId" class="svc-radio" />
+                <div class="svc-body">
+                  <div class="svc-top">
+                    <span class="svc-badge">{{ svc.category }}</span>
+                    <span class="svc-name">{{ svc.name }}</span>
+                  </div>
+                  <p class="svc-desc">{{ svc.description }}</p>
+                  <div class="svc-meta">
+                    <span class="svc-duration">{{ svc.durationMinutes }}분</span>
+                    <span class="svc-price">{{ svc.price?.toLocaleString() }}원</span>
+                  </div>
+                </div>
               </label>
-              <div v-if="imageFiles.length" class="image-preview-list">
-                <div v-for="(file, idx) in imageFiles" :key="idx" class="image-preview-item">
-                  <img :src="imagePreviewUrls[idx]" class="preview-img" />
-                  <button type="button" class="remove-img-btn" @click="removeImage(idx)">✕</button>
+            </div>
+
+            <div class="form-group" style="margin-top:20px">
+              <label class="form-label">요구사항 (선택)</label>
+              <textarea v-model="requestMemo" class="form-input" rows="3" placeholder="원하는 스타일, 특이사항 등을 입력해주세요"></textarea>
+            </div>
+          </section>
+
+          <!-- 섹션 3: 결제 -->
+          <section class="card booking-section" id="sec-payment">
+            <div class="section-badge">3</div>
+            <h2 class="section-title">결제</h2>
+
+            <div v-if="!selectedDate || !selectedTime || !selectedServiceId" class="payment-placeholder">
+              <p>날짜, 시간, 서비스를 모두 선택하면<br>결제 수단이 표시됩니다</p>
+            </div>
+
+            <template v-else>
+              <!-- 예약 요약 -->
+              <div class="confirm-rows">
+                <div class="confirm-row">
+                  <span class="confirm-label">스타일리스트</span>
+                  <span class="confirm-val">{{ stylist?.name }}</span>
+                </div>
+                <div class="confirm-row">
+                  <span class="confirm-label">날짜 / 시간</span>
+                  <span class="confirm-val">{{ selectedDate }} {{ selectedTime }}</span>
+                </div>
+                <div class="confirm-row">
+                  <span class="confirm-label">서비스</span>
+                  <span class="confirm-val">{{ selectedService?.name }}</span>
+                </div>
+                <div class="confirm-row total">
+                  <span class="confirm-label">결제 금액</span>
+                  <span class="confirm-val price">{{ selectedService?.price?.toLocaleString() }}원</span>
                 </div>
               </div>
-              <p class="upload-hint">미용사에게 전달할 스타일 참고 사진을 첨부하세요</p>
-            </div>
-          </div>
 
-          <div class="step-footer two-btn">
-            <button class="btn btn-ghost btn-lg" @click="currentStep--">이전</button>
-            <button
-              class="btn btn-primary btn-lg"
-              :disabled="!selectedService"
-              @click="currentStep++"
-            >다음 단계</button>
-          </div>
-        </div>
+              <!-- 토스 결제 위젯 -->
+              <div class="widget-wrap">
+                <div id="payment-widget"></div>
+                <div id="payment-agreement"></div>
+              </div>
 
-        <!-- Step 3: 확인 & 결제 -->
-        <div v-if="currentStep === 2" class="card step-card">
-          <h2 class="step-title">예약 확인 &amp; 결제</h2>
+              <p v-if="widgetError" class="err-msg">{{ widgetError }}</p>
+              <p v-if="payError" class="err-msg">{{ payError }}</p>
 
-          <div class="confirm-box">
-            <div class="confirm-row">
-              <span class="cr-label">미용사</span>
-              <span class="cr-value">{{ stylist.name }} · {{ stylist.salonName }}</span>
-            </div>
-            <div class="confirm-row">
-              <span class="cr-label">날짜 &amp; 시간</span>
-              <span class="cr-value">{{ reservedAtDisplay }}</span>
-            </div>
-            <div class="confirm-row">
-              <span class="cr-label">서비스</span>
-              <span class="cr-value">{{ selectedService?.name }}</span>
-            </div>
-            <div class="confirm-row" v-if="requestText">
-              <span class="cr-label">요구사항</span>
-              <span class="cr-value">{{ requestText }}</span>
-            </div>
-            <div class="confirm-row total-row">
-              <span class="cr-label">결제 금액</span>
-              <span class="cr-value cr-price">{{ selectedService?.price?.toLocaleString() }}원</span>
-            </div>
-          </div>
-
-          <!-- 결제 수단 선택 -->
-          <div class="method-section">
-            <h3 class="method-title">결제 수단</h3>
-            <div class="method-grid">
               <button
-                v-for="m in payMethods"
-                :key="m.value"
-                class="method-btn"
-                :class="{ selected: payMethod === m.value }"
-                @click="payMethod = m.value"
+                class="btn btn-primary btn-full pay-btn"
+                :disabled="paying || !widgetReady"
+                @click="handlePay"
               >
-                <span class="method-icon">{{ m.icon }}</span>
-                <span>{{ m.label }}</span>
+                <span v-if="paying" class="spinner" style="width:16px;height:16px;border-width:2px"></span>
+                <span v-else>{{ selectedService?.price?.toLocaleString() }}원 결제하기</span>
               </button>
+            </template>
+          </section>
+
+        </div><!-- /booking-main -->
+
+        <!-- ──────────── 사이드바 ──────────── -->
+        <aside class="booking-sidebar">
+          <div class="card stylist-card" v-if="stylist">
+            <img :src="stylist.profileImg || `https://i.pravatar.cc/80?u=${stylist.id}`" class="sidebar-img" />
+            <div class="sidebar-info">
+              <p class="sidebar-name">{{ stylist.name }}</p>
+              <p class="sidebar-salon">{{ stylist.salonName }}</p>
+              <div class="sidebar-rating"><span class="star-icon">★</span>{{ stylist.rating?.toFixed(1) }}</div>
             </div>
           </div>
 
-          <p v-if="bookingError" class="msg-error">{{ bookingError }}</p>
+          <div class="card selection-summary" v-if="selectedDate || selectedServiceId">
+            <h3 class="summary-title">선택 내역</h3>
+            <div v-if="selectedDate && selectedTime" class="summary-row">
+              <span class="summary-label">일시</span>
+              <span class="summary-val">{{ selectedDate }}<br>{{ selectedTime }}</span>
+            </div>
+            <div v-if="selectedService" class="summary-row">
+              <span class="summary-label">서비스</span>
+              <span class="summary-val">{{ selectedService.name }}</span>
+            </div>
+            <div v-if="selectedService" class="summary-row price-row">
+              <span class="summary-label">금액</span>
+              <span class="summary-val price">{{ selectedService.price?.toLocaleString() }}원</span>
+            </div>
+          </div>
+        </aside>
 
-          <div class="step-footer two-btn">
-            <button class="btn btn-ghost btn-lg" @click="currentStep--">이전</button>
-            <button
-              class="btn btn-primary btn-lg"
-              :disabled="booking"
-              @click="submitReservation"
-            >
-              <span v-if="booking" class="spinner" style="width:18px;height:18px;border-width:2px;"></span>
-              <span v-else>{{ selectedService?.price?.toLocaleString() }}원 결제하기</span>
+      </div><!-- /booking-grid -->
+    </div>
+  </main>
+
+  <!-- 빈자리 알림 모달 -->
+  <Teleport to="body">
+    <Transition name="modal">
+      <div v-if="waitingModal.show" class="modal-overlay" @click.self="waitingModal.show = false">
+        <div class="modal-box">
+          <div class="modal-icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            </svg>
+          </div>
+          <h3 class="modal-title">빈자리 알림 신청</h3>
+          <p class="modal-desc">
+            <strong>{{ selectedDate }} {{ waitingModal.time }}</strong> 시간대는 이미 예약이 차있습니다.<br>
+            해당 예약이 취소되면 알림을 보내드릴까요?
+          </p>
+          <p v-if="waitingModal.error" class="modal-error">{{ waitingModal.error }}</p>
+          <div class="modal-actions">
+            <button class="btn btn-ghost" @click="waitingModal.show = false">취소</button>
+            <button class="btn btn-primary" :disabled="waitingModal.loading" @click="registerWaiting">
+              <span v-if="waitingModal.loading" class="spinner" style="width:14px;height:14px;border-width:2px;margin-right:6px"></span>
+              알림 신청
             </button>
           </div>
         </div>
       </div>
-    </div>
-  </main>
+    </Transition>
+  </Teleport>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { stylistApi } from '@/api/stylist'
-import { reservationApi } from '@/api/reservation'
+import { reservationApi, waitingApi } from '@/api/reservation'
 import { paymentApi } from '@/api/payment'
 import { useAuthStore } from '@/stores/authStore'
 
-const route     = useRoute()
-const router    = useRouter()
-const authStore = useAuthStore()
-const stylistId = route.params.stylistId
+const route  = useRoute()
+const router = useRouter()
+const auth   = useAuthStore()
 
-const currentStep = ref(0)
-const steps = ['날짜/시간', '서비스', '결제']
+const stylist  = ref(null)
+const services = ref([])
 
-const stylist          = ref({})
-const services         = ref([])
-const servicesLoading  = ref(false)
-const selectedService  = ref(null)
-const selectedDate     = ref(null)
-const selectedTime     = ref(null)
-const requestText      = ref('')
-const booking               = ref(false)
-const bookingError          = ref('')
-const bookedTimes           = ref([])
-const pendingReservationId  = ref(null)  // 결제 도중 생성된 예약 ID (취소 시 정리용)
+const calYear  = ref(new Date().getFullYear())
+const calMonth = ref(new Date().getMonth())
 
-const imageFiles       = ref([])
-const imagePreviewUrls = ref([])
+const selectedDate      = ref('')
+const selectedTime      = ref('')
+const selectedServiceId = ref(route.query.serviceId ? Number(route.query.serviceId) : null)
+const requestMemo       = ref('')
+const slotsLoading      = ref(false)
+const bookedTimes       = ref([])
+const paying            = ref(false)
+const payError          = ref('')
+const widgetError       = ref('')
+const widgetReady       = ref(false)
+const waitingModal      = ref({ show: false, time: '', loading: false, error: '' })
+const waitingSuccess    = ref('')
 
-function handleImageChange(e) {
-  const selected = Array.from(e.target.files)
-  const remaining = 5 - imageFiles.value.length
-  const toAdd = selected.slice(0, remaining)
-  toAdd.forEach(file => {
-    imageFiles.value.push(file)
-    imagePreviewUrls.value.push(URL.createObjectURL(file))
-  })
-  e.target.value = ''
-}
+let paymentWidget        = null
+let paymentMethodsWidget = null
 
-function removeImage(idx) {
-  URL.revokeObjectURL(imagePreviewUrls.value[idx])
-  imageFiles.value.splice(idx, 1)
-  imagePreviewUrls.value.splice(idx, 1)
-}
+const selectedService = computed(() => services.value.find(s => s.id === selectedServiceId.value))
 
-const payMethod  = ref('카드')
-const payMethods = [
-  { value: '카드',    label: '신용/체크카드', icon: '💳' },
-  { value: '토스페이', label: '토스페이',     icon: '💸' },
-  { value: '계좌이체', label: '계좌이체',     icon: '🏦' },
-]
-
-const groupedServices = computed(() => {
-  const g = {}
-  services.value.forEach(s => {
-    const c = s.category || '기타'
-    if (!g[c]) g[c] = []
-    g[c].push(s)
-  })
-  return g
-})
-
-function loadTossScript() {
-  return new Promise((resolve) => {
-    if (window.TossPayments) { resolve(true); return }
-    const script = document.createElement('script')
-    script.src = 'https://js.tosspayments.com/v1/payment'
-    script.onload  = () => resolve(true)
-    script.onerror = () => resolve(false)
-    document.head.appendChild(script)
-  })
-}
-
-// Calendar
-const today        = new Date()
-const currentYear  = ref(today.getFullYear())
-const currentMonth = ref(today.getMonth())
-
-const daysInMonth = computed(() => new Date(currentYear.value, currentMonth.value + 1, 0).getDate())
-const startDay    = computed(() => new Date(currentYear.value, currentMonth.value, 1).getDay())
-
-function prevMonth() {
-  if (currentMonth.value === 0) { currentYear.value--; currentMonth.value = 11 }
-  else currentMonth.value--
-}
-function nextMonth() {
-  if (currentMonth.value === 11) { currentYear.value++; currentMonth.value = 0 }
-  else currentMonth.value++
-}
-function isToday(day) {
-  const d = new Date()
-  return d.getFullYear() === currentYear.value && d.getMonth() === currentMonth.value && d.getDate() === day
-}
-function isPast(day) {
-  const d = new Date(currentYear.value, currentMonth.value, day)
-  const t = new Date(); t.setHours(0, 0, 0, 0)
-  return d < t
-}
-function isClosedDay(day) {
-  if (!stylist.value.workingHours?.length) return true  // 영업시간 미설정 → 모든 날 비활성화
-  const d = new Date(currentYear.value, currentMonth.value, day)
-  const jsDay = d.getDay()
-  const backendDay = jsDay === 0 ? 6 : jsDay - 1
-  const h = stylist.value.workingHours.find(h => h.dayOfWeek === backendDay)
-  return !h || h.isDayOff || !h.openTime || !h.closeTime
-}
+const daysInMonth = computed(() => new Date(calYear.value, calMonth.value + 1, 0).getDate())
+const startBlank  = computed(() => new Date(calYear.value, calMonth.value, 1).getDay())
 
 const timeSlots = computed(() => {
-  if (!selectedDate.value || !stylist.value.workingHours) return []
-  const d = new Date(currentYear.value, currentMonth.value, selectedDate.value)
-  const jsDay = d.getDay()
-  const backendDay = jsDay === 0 ? 6 : jsDay - 1
-
-  const h = stylist.value.workingHours.find(h => h.dayOfWeek === backendDay)
-  if (!h || h.isDayOff || !h.openTime || !h.closeTime) return []
-
-  const [oH, oM] = h.openTime.split(':').map(Number)
-  const [cH, cM] = h.closeTime.split(':').map(Number)
   const slots = []
-  let curH = oH, curM = oM
-
-  while (curH < cH || (curH === cH && curM < cM)) {
-    const t = `${String(curH).padStart(2,'0')}:${String(curM).padStart(2,'0')}`
-    slots.push({ time: t, booked: bookedTimes.value.includes(t) })
-    curM += 30
-    if (curM >= 60) { curH++; curM -= 60 }
+  for (let h = 9; h <= 19; h++) {
+    const time = `${String(h).padStart(2,'0')}:00`
+    slots.push({ time, booked: bookedTimes.value.includes(time) })
   }
   return slots
 })
 
-const reservedAtDisplay = computed(() => {
-  if (!selectedDate.value || !selectedTime.value) return ''
-  const mm = String(currentMonth.value + 1).padStart(2,'0')
-  const dd = String(selectedDate.value).padStart(2,'0')
-  return `${currentYear.value}.${mm}.${dd} ${selectedTime.value}`
-})
+function prevMonth() {
+  if (calMonth.value === 0) { calYear.value--; calMonth.value = 11 } else calMonth.value--
+}
+function nextMonth() {
+  if (calMonth.value === 11) { calYear.value++; calMonth.value = 0 } else calMonth.value++
+}
+function isSelectedDate(day) {
+  return selectedDate.value === `${calYear.value}-${String(calMonth.value+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`
+}
+function isTodayDate(day) {
+  const t = new Date()
+  return calYear.value === t.getFullYear() && calMonth.value === t.getMonth() && day === t.getDate()
+}
+function isPastDate(day) {
+  const d = new Date(calYear.value, calMonth.value, day)
+  const t = new Date(); t.setHours(0,0,0,0)
+  return d < t
+}
 
-watch(selectedDate, async (val) => {
-  selectedTime.value = null
-  bookedTimes.value = []
-  if (!val) return
-  const mm = String(currentMonth.value + 1).padStart(2,'0')
-  const dd = String(val).padStart(2,'0')
+async function selectDate(day) {
+  if (isPastDate(day)) return
+  selectedDate.value = `${calYear.value}-${String(calMonth.value+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`
+  selectedTime.value = ''
+  slotsLoading.value = true
   try {
-    const res = await reservationApi.getBookedTimes(stylistId, `${currentYear.value}-${mm}-${dd}`)
+    const res = await reservationApi.getBookedTimes(route.params.stylistId, selectedDate.value)
     bookedTimes.value = res.data || []
-  } catch (e) {
-    console.error('예약 시간 조회 실패', e)
-  }
-})
+  } catch { bookedTimes.value = [] }
+  finally { slotsLoading.value = false }
+}
 
-onMounted(async () => {
-  servicesLoading.value = true
+function openWaitingModal(time) {
+  if (!auth.isLoggedIn) { router.push('/login'); return }
+  waitingModal.value = { show: true, time, loading: false, error: '' }
+}
+
+async function registerWaiting() {
+  waitingModal.value.loading = true
+  waitingModal.value.error = ''
   try {
-    const res = await stylistApi.getStylist(stylistId)
-    stylist.value  = res.data
-    services.value = res.data.services ?? []
+    await waitingApi.register(route.params.stylistId, selectedDate.value, waitingModal.value.time)
+    const t = waitingModal.value.time
+    waitingModal.value.show = false
+    waitingSuccess.value = `${selectedDate.value} ${t} 빈자리 알림이 신청되었습니다.`
+    setTimeout(() => { waitingSuccess.value = '' }, 4000)
   } catch (e) {
-    console.error('스타일리스트 로드 실패', e)
+    waitingModal.value.error = e.response?.data?.message || '신청 중 오류가 발생했습니다.'
   } finally {
-    servicesLoading.value = false
-  }
-  await loadTossScript()
-})
-
-async function submitReservation() {
-  booking.value      = true
-  bookingError.value = ''
-  try {
-    const mm = String(currentMonth.value + 1).padStart(2,'0')
-    const dd = String(selectedDate.value).padStart(2,'0')
-    const reservedAt = `${currentYear.value}-${mm}-${dd}T${selectedTime.value}:00`
-
-    // 1. 예약 생성
-    const res = await reservationApi.create({
-      stylistId: Number(stylistId),
-      serviceId: selectedService.value.id,
-      reservedAt,
-      requestMemo: requestText.value || null,
-    })
-    const createdId = res.data.id
-    pendingReservationId.value = createdId  // catch에서 접근 가능하도록 저장
-
-    // 2. 이미지 업로드 (선택)
-    if (imageFiles.value.length > 0) {
-      const formData = new FormData()
-      imageFiles.value.forEach(f => formData.append('images', f))
-      await reservationApi.uploadImages(createdId, formData)
-    }
-
-    // 3. 결제 준비
-    const prepareRes = await paymentApi.prepare(createdId)
-    const orderId    = prepareRes.data.orderId
-
-    // 3. Toss v1 결제창 호출
-    if (!window.TossPayments) {
-      try { await reservationApi.cancel(createdId) } catch (_) {}
-      bookingError.value = '결제 모듈을 불러오지 못했습니다. 잠시 후 다시 시도하세요.'
-      return
-    }
-    const toss = window.TossPayments(import.meta.env.VITE_TOSS_CLIENT_KEY || 'test_ck_placeholder')
-    await toss.requestPayment(payMethod.value, {
-      amount:       selectedService.value.price,
-      orderId,
-      orderName:    selectedService.value.name,
-      customerName: authStore.user?.name || '고객',
-      successUrl:   `${window.location.origin}/payment/success`,
-      failUrl:      `${window.location.origin}/payment/fail`,
-    })
-    // 리다이렉트 발생 — 아래 코드는 실행되지 않음
-  } catch (e) {
-    if (e.code === 'USER_CANCEL') {
-      // 팝업 취소 → 생성된 PENDING 예약을 즉시 취소해서 슬롯 해방
-      if (pendingReservationId.value) {
-        try { await reservationApi.cancel(pendingReservationId.value) } catch (_) {}
-        pendingReservationId.value = null
-      }
-      bookingError.value = '결제가 취소되었습니다. 다시 시도해주세요.'
-    } else {
-      // 예약 생성 이후 다른 오류 발생 시에도 슬롯 정리
-      if (pendingReservationId.value) {
-        try { await reservationApi.cancel(pendingReservationId.value) } catch (_) {}
-        pendingReservationId.value = null
-      }
-      bookingError.value = e.response?.data?.message || e.message || '결제 중 오류가 발생했습니다.'
-    }
-  } finally {
-    booking.value = false
+    waitingModal.value.loading = false
   }
 }
+
+// ── Toss 위젯 ──────────────────────────────────────────────────────────────
+
+async function initWidget(price) {
+  widgetError.value = ''
+  widgetReady.value = false
+
+  if (!window.PaymentWidget) {
+    widgetError.value = '결제 모듈을 불러올 수 없습니다. 페이지를 새로고침해주세요.'
+    return
+  }
+  if (!price || price <= 0) return
+
+  try {
+    // 위젯이 이미 있으면 컨테이너를 비우고 재생성
+    const container = document.getElementById('payment-widget')
+    if (container) container.innerHTML = ''
+    const agreeContainer = document.getElementById('payment-agreement')
+    if (agreeContainer) agreeContainer.innerHTML = ''
+
+    paymentWidget = window.PaymentWidget(
+      import.meta.env.VITE_TOSS_CLIENT_KEY,
+      window.PaymentWidget.ANONYMOUS,
+    )
+    paymentMethodsWidget = await paymentWidget.renderPaymentMethods(
+      '#payment-widget',
+      { value: price },
+    )
+    try {
+      await paymentWidget.renderAgreement('#payment-agreement')
+    } catch { /* 약관 위젯 미지원 무시 */ }
+    widgetReady.value = true
+  } catch (e) {
+    console.error('[Toss Widget]', e)
+    widgetError.value = `결제 위젯 오류: ${e.message}`
+  }
+}
+
+// 날짜·시간·서비스 중 하나라도 바뀌면 결제 위젯 초기화/갱신
+watch([selectedDate, selectedTime, selectedServiceId], async ([date, time, serviceId]) => {
+  if (!date || !time || !serviceId) return
+  const svc = services.value.find(s => s.id === serviceId)
+  if (!svc) return
+
+  await nextTick() // #payment-widget 이 DOM에 렌더링될 때까지 대기
+
+  if (paymentMethodsWidget) {
+    try { await paymentMethodsWidget.updateAmount(svc.price); return } catch {}
+  }
+  await initWidget(svc.price)
+})
+
+// ── 결제 처리 ───────────────────────────────────────────────────────────────
+
+async function handlePay() {
+  payError.value = ''
+  if (!selectedDate.value || !selectedTime.value) { payError.value = '날짜와 시간을 선택해주세요.'; return }
+  if (!selectedServiceId.value) { payError.value = '서비스를 선택해주세요.'; return }
+  if (!paymentWidget) { payError.value = '결제 위젯이 준비되지 않았습니다. 잠시 후 다시 시도해주세요.'; return }
+
+  paying.value = true
+  try {
+    // 1. 예약 생성 (PENDING)
+    const reservedAt = `${selectedDate.value}T${selectedTime.value}:00`
+    const resRes = await reservationApi.create({
+      stylistId: Number(route.params.stylistId),
+      serviceId: selectedServiceId.value,
+      reservedAt,
+      requestMemo: requestMemo.value,
+    })
+    const reservationId = resRes.data.id
+
+    // 2. 결제 준비 (orderId 발급)
+    const prepRes = await paymentApi.prepare({ reservationId, method: 'TOSS' })
+    const { orderId } = prepRes.data
+
+    // 3. 토스 결제창 (리다이렉트)
+    await paymentWidget.requestPayment({
+      orderId,
+      orderName: selectedService.value?.name,
+      successUrl: `${window.location.origin}/payment/success`,
+      failUrl:    `${window.location.origin}/payment/fail`,
+    })
+    // requestPayment 후 리다이렉트되므로 아래 코드는 실행되지 않음
+  } catch (e) {
+    if (e?.code === 'PAY_PROCESS_CANCELED' || e?.code === 'USER_CANCEL') {
+      // 사용자가 결제창을 닫음 → PENDING 예약은 10분 후 스케줄러가 정리
+      paying.value = false
+      return
+    }
+    payError.value = e.response?.data?.message || e.message || '결제 처리 중 오류가 발생했습니다.'
+    paying.value = false
+  }
+}
+
+// ── 초기화 ──────────────────────────────────────────────────────────────────
+
+onMounted(async () => {
+  const id = route.params.stylistId
+  try {
+    const res = await stylistApi.getStylist(id)
+    stylist.value  = res.data
+    services.value = res.data.services || []
+    if (route.query.time) selectedTime.value = route.query.time
+
+    // 쿼리로 서비스가 미리 선택된 경우 위젯 즉시 초기화
+    if (selectedServiceId.value) {
+      await nextTick()
+      const svc = services.value.find(s => s.id === selectedServiceId.value)
+      if (svc) await initWidget(svc.price)
+    }
+  } catch {}
+})
 </script>
 
 <style scoped>
-.page-header { margin-bottom: 24px; }
-.back-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: none;
-  border: none;
-  color: var(--text-sub);
-  font-size: 14px;
-  cursor: pointer;
-  padding: 6px 0;
-  margin-bottom: 12px;
-  transition: var(--transition);
+.back-link {
+  display: inline-block; margin-bottom: 24px;
+  font-size: 13px; color: var(--text-muted); background: none; border: none; cursor: pointer; padding: 0;
 }
-.back-btn:hover { color: var(--primary); }
+.back-link:hover { color: var(--text); }
 
-/* Steps */
-.steps {
-  display: flex;
-  align-items: center;
-  margin-bottom: 28px;
-  padding: 16px 20px;
-  background: #fff;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+/* Grid */
+.booking-grid {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 24px;
+  align-items: start;
 }
-.step-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-}
-.step-dot {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 2px solid var(--border);
-  background: #fff;
-  color: var(--text-muted);
-  font-size: 13px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  transition: var(--transition);
-}
-.step-label {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-.step-line {
-  flex: 1;
-  height: 1px;
-  background: var(--border);
-  margin: 0 8px;
-}
-.step-item.active .step-dot { border-color: var(--primary); color: var(--primary); }
-.step-item.active .step-label { color: var(--primary); font-weight: 700; }
-.step-item.done .step-dot { background: var(--primary); border-color: var(--primary); color: #fff; }
-.step-item.done .step-label { color: var(--text-sub); }
+.booking-main { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 
-/* Step Card */
-.booking-body { max-width: 640px; margin: 0 auto; }
-.step-card { padding: 28px; }
-.step-title { font-size: 18px; font-weight: 700; margin-bottom: 24px; }
+/* Section cards */
+.booking-section { position: relative; padding-top: 28px; }
+.section-badge {
+  position: absolute; top: -14px; left: 20px;
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--primary); color: #fff;
+  font-size: 12px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+}
+.section-title { font-size: 18px; font-weight: 700; margin-bottom: 20px; letter-spacing: -0.02em; }
+.sub-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: var(--text-sub); }
+
+.done-badge {
+  margin-top: 16px; padding: 10px 14px;
+  background: var(--success-light); border-radius: var(--radius-sm);
+  font-size: 13px; font-weight: 600; color: var(--success);
+}
 
 /* Calendar */
-.calendar { margin-bottom: 24px; }
-.cal-nav {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-}
-.cal-month { font-size: 16px; font-weight: 700; }
-.cal-nav-btn {
-  width: 32px; height: 32px;
-  border: 1px solid var(--border);
-  background: #fff;
-  border-radius: var(--radius-sm);
-  font-size: 18px;
-  color: var(--text-sub);
-  cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  transition: var(--transition);
-}
-.cal-nav-btn:hover { border-color: var(--primary); color: var(--primary); }
-.cal-head {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  text-align: center;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-muted);
-  margin-bottom: 8px;
-}
-.cal-grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 3px;
-}
-.cal-empty { pointer-events: none; }
+.cal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.cal-month { font-size: 15px; font-weight: 700; }
+.cal-nav { background: none; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 5px 11px; font-size: 13px; cursor: pointer; transition: var(--transition); }
+.cal-nav:hover { background: var(--bg-surface); }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cal-dow { text-align: center; font-size: 12px; font-weight: 600; color: var(--text-muted); padding: 6px 0; }
 .cal-day {
-  aspect-ratio: 1;
-  border: none;
-  background: transparent;
-  border-radius: var(--radius-sm);
-  font-size: 14px;
-  color: var(--text);
-  cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  transition: var(--transition);
+  aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-sm); font-size: 13px; font-weight: 500;
+  background: transparent; border: 1px solid transparent; cursor: pointer; transition: var(--transition);
 }
-.cal-day:hover:not(:disabled) { background: var(--primary-light); color: var(--primary); }
-.cal-day.selected { background: var(--primary); color: #fff; font-weight: 700; }
-.cal-day.today:not(.selected) { font-weight: 700; color: var(--primary); }
-.cal-day:disabled { color: var(--text-muted); cursor: not-allowed; }
-.cal-day.closed { background: #f5f5f5; color: var(--text-muted); text-decoration: line-through; }
+.cal-day:hover:not(.disabled):not(.empty) { background: var(--bg-surface); border-color: var(--border); }
+.cal-day.today { font-weight: 800; color: var(--primary); }
+.cal-day.selected { background: var(--primary); color: #fff; border-color: var(--primary); }
+.cal-day.disabled { color: var(--text-muted); cursor: not-allowed; opacity: 0.4; }
+.cal-day.empty { pointer-events: none; }
 
-/* Time Slots */
-.time-section { border-top: 1px solid var(--border); padding-top: 20px; }
-.time-title { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
-.no-slots { color: var(--text-muted); font-size: 14px; }
-.time-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+/* Time slots */
+.time-section { margin-top: 20px; border-top: 1px solid var(--border); padding-top: 18px; }
+.slots-loading { padding: 16px 0; display: flex; justify-content: center; }
+.time-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
 .time-slot {
-  padding: 8px 14px;
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-full);
-  background: #fff;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text);
-  cursor: pointer;
-  transition: var(--transition);
+  padding: 9px 0; text-align: center; border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border); background: var(--bg-card);
+  font-size: 13px; font-weight: 600; cursor: pointer; transition: var(--transition);
+  position: relative;
 }
 .time-slot:hover:not(.booked) { border-color: var(--primary); color: var(--primary); }
-.time-slot.selected { background: var(--primary); border-color: var(--primary); color: #fff; }
-.time-slot.booked { background: var(--bg); color: var(--text-muted); cursor: not-allowed; text-decoration: line-through; }
+.time-slot.selected { background: var(--primary); color: #fff; border-color: var(--primary); }
+.time-slot.booked { background: var(--bg-surface); color: var(--text-muted); cursor: pointer; }
+.time-slot.booked:hover { border-color: var(--accent); color: var(--accent); }
+.slot-booked-label { display: block; font-size: 9px; font-weight: 700; color: var(--danger); margin-top: 1px; }
+.slot-hint { font-size: 12px; color: var(--text-muted); margin-top: 10px; padding: 8px 12px; background: var(--bg-surface); border-radius: var(--radius-sm); }
 
-/* Services */
-.service-group { margin-bottom: 24px; }
-.service-cat {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-sub);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 10px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--border);
-}
+/* Service list */
 .service-list { display: flex; flex-direction: column; gap: 8px; }
-.service-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 14px 16px;
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-md);
-  background: #fff;
-  cursor: pointer;
-  transition: var(--transition);
-  text-align: left;
-}
-.service-item:hover { border-color: var(--primary); }
-.service-item.selected { border-color: var(--primary); background: var(--primary-light); }
-.si-info { display: flex; flex-direction: column; gap: 2px; }
-.si-name { font-size: 15px; font-weight: 600; }
-.si-desc { font-size: 12px; color: var(--text-muted); }
-.si-price { font-size: 15px; font-weight: 700; color: var(--primary); flex-shrink: 0; margin-left: 12px; }
-.no-service { color: var(--text-muted); font-size: 14px; }
+.svc-option { display: flex; gap: 14px; align-items: flex-start; padding: 14px 16px; border-radius: var(--radius-md); border: 1.5px solid var(--border); cursor: pointer; transition: var(--transition); }
+.svc-option:hover { border-color: var(--border-strong); }
+.svc-option.selected { border-color: var(--primary); background: rgba(24,24,27,0.02); }
+.svc-radio { margin-top: 3px; accent-color: var(--primary); flex-shrink: 0; }
+.svc-body { flex: 1; }
+.svc-top { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.svc-badge { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: var(--radius-full); background: var(--accent-light); color: var(--accent); }
+.svc-name { font-size: 15px; font-weight: 700; }
+.svc-desc { font-size: 13px; color: var(--text-muted); margin-bottom: 8px; }
+.svc-meta { display: flex; gap: 12px; font-size: 13px; }
+.svc-duration { color: var(--text-muted); }
+.svc-price { font-weight: 700; color: var(--text); }
 
-/* Confirm */
-.confirm-box {
-  background: var(--bg);
-  border-radius: var(--radius-md);
-  padding: 16px;
-  margin-bottom: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.confirm-row { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
-.cr-label { font-size: 13px; color: var(--text-muted); flex-shrink: 0; }
-.cr-value { font-size: 14px; color: var(--text); text-align: right; }
-.total-row { padding-top: 12px; border-top: 1px solid var(--border); }
-.cr-price { font-size: 18px; font-weight: 700; color: var(--primary); }
+/* Form */
+.form-group { display: flex; flex-direction: column; gap: 6px; }
+.form-label { font-size: 13px; font-weight: 600; color: var(--text-sub); }
+.form-input { padding: 10px 14px; border: 1.5px solid var(--border); border-radius: var(--radius-md); font-size: 14px; background: var(--bg); color: var(--text); resize: vertical; transition: var(--transition); }
+.form-input:focus { border-color: var(--primary); background: #fff; }
 
-/* Payment method */
-.method-section { margin-bottom: 24px; }
-.method-title { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
-.method-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.method-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 14px 10px;
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-md);
-  background: #fff;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-sub);
-  cursor: pointer;
-  transition: var(--transition);
-}
-.method-btn:hover { border-color: var(--primary); color: var(--primary); }
-.method-btn.selected { border-color: var(--primary); background: var(--primary-light); color: var(--primary); font-weight: 600; }
-.method-icon { font-size: 22px; }
-
-.msg-error { color: var(--red); font-size: 13px; margin-bottom: 12px; }
-
-/* Footer */
-.step-footer { margin-top: 28px; }
-.step-footer.two-btn { display: flex; gap: 10px; }
-.step-footer.two-btn .btn:last-child { flex: 2; }
-.step-footer.two-btn .btn:first-child { flex: 1; }
-
-/* Image Upload */
-.image-upload-label { display: inline-block; cursor: pointer; }
-.upload-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border: 1.5px dashed var(--border);
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  color: var(--text-sub);
-  background: var(--bg);
-  transition: var(--transition);
-}
-.upload-btn:hover { border-color: var(--primary); color: var(--primary); }
-
-.image-preview-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
-}
-.image-preview-item {
-  position: relative;
-  width: 72px;
-  height: 72px;
-}
-.preview-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-}
-.remove-img-btn {
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  width: 20px;
-  height: 20px;
-  background: var(--red);
-  color: #fff;
-  border: none;
-  border-radius: 50%;
-  font-size: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-.upload-hint { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
-
-.no-hours-notice {
-  background: #fff8e1;
-  border: 1px solid #ffe082;
-  border-radius: var(--radius-sm);
-  padding: 12px 16px;
-  font-size: 13px;
-  color: #795548;
-  margin-bottom: 20px;
+/* Payment section */
+.payment-placeholder {
+  padding: 48px 0; text-align: center;
+  color: var(--text-muted); font-size: 14px; line-height: 1.8;
+  background: var(--bg-surface); border-radius: var(--radius-md);
 }
 
-.loading-center { text-align: center; padding: 40px; }
+.confirm-rows { display: flex; flex-direction: column; gap: 2px; margin-bottom: 20px; }
+.confirm-row { display: flex; justify-content: space-between; align-items: center; padding: 11px 14px; border-radius: var(--radius-sm); background: var(--bg-surface); }
+.confirm-row.total { background: var(--primary); border-radius: var(--radius-md); margin-top: 4px; }
+.confirm-label { font-size: 13px; color: var(--text-muted); font-weight: 500; }
+.confirm-val { font-size: 14px; font-weight: 600; color: var(--text); }
+.confirm-row.total .confirm-label { color: rgba(255,255,255,0.75); }
+.confirm-row.total .confirm-val { color: #fff; }
+.confirm-val.price { font-size: 17px; font-weight: 800; }
+
+.widget-wrap { margin: 16px -24px 0; }
+#payment-widget { min-height: 50px; }
+#payment-agreement { }
+
+.err-msg { color: var(--danger); font-size: 13px; margin-top: 8px; padding: 10px 14px; background: var(--danger-light); border-radius: var(--radius-sm); }
+.pay-btn { margin-top: 16px; padding: 15px; font-size: 15px; }
+.pay-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Sidebar */
+.booking-sidebar { position: sticky; top: 76px; display: flex; flex-direction: column; gap: 16px; }
+.stylist-card { display: flex; gap: 14px; align-items: center; }
+.sidebar-img { width: 52px; height: 52px; border-radius: var(--radius-md); object-fit: cover; flex-shrink: 0; }
+.sidebar-name { font-size: 15px; font-weight: 700; }
+.sidebar-salon { font-size: 12px; color: var(--text-muted); margin: 2px 0 6px; }
+.sidebar-rating { display: flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 600; }
+.star-icon { color: var(--gold); }
+
+.selection-summary { display: flex; flex-direction: column; gap: 0; }
+.summary-title { font-size: 13px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 12px; }
+.summary-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.summary-row:last-child { border-bottom: none; }
+.summary-label { color: var(--text-muted); flex-shrink: 0; }
+.summary-val { font-weight: 600; color: var(--text); text-align: right; line-height: 1.5; }
+.price-row .summary-val.price { font-size: 16px; font-weight: 800; color: var(--primary); }
+
+/* Modal */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
+.modal-box { background: #fff; border-radius: var(--radius-lg); padding: 32px 28px; max-width: 400px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.2); text-align: center; }
+.modal-icon { width: 52px; height: 52px; border-radius: 50%; background: rgba(99,102,241,0.1); color: var(--accent); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
+.modal-title { font-size: 18px; font-weight: 800; margin-bottom: 10px; }
+.modal-desc { font-size: 14px; color: var(--text-sub); line-height: 1.7; margin-bottom: 24px; }
+.modal-desc strong { color: var(--text); }
+.modal-error { font-size: 13px; color: var(--danger); margin-bottom: 12px; }
+.modal-actions { display: flex; gap: 8px; justify-content: center; }
+.modal-actions .btn { min-width: 100px; }
+
+/* Toast */
+.waiting-toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--primary); color: #fff; padding: 12px 24px; border-radius: var(--radius-full); font-size: 13px; font-weight: 600; box-shadow: 0 4px 16px rgba(0,0,0,0.2); z-index: 2000; white-space: nowrap; }
+.toast-enter-active, .toast-leave-active { transition: all 0.3s ease; }
+.toast-enter-from, .toast-leave-to { opacity: 0; transform: translateX(-50%) translateY(12px); }
+
+/* Modal animation */
+.modal-enter-active, .modal-leave-active { transition: all 0.2s ease; }
+.modal-enter-from, .modal-leave-to { opacity: 0; }
+.modal-enter-from .modal-box, .modal-leave-to .modal-box { transform: scale(0.95); }
 
 @media (max-width: 768px) {
-  .steps { padding: 12px 14px; gap: 0; }
-  .step-label { display: none; }
-  .step-card { padding: 20px 16px; }
-  .method-grid { grid-template-columns: repeat(2, 1fr); }
+  .booking-grid { grid-template-columns: 1fr; }
+  .booking-sidebar { position: static; order: -1; }
+  .time-grid { grid-template-columns: repeat(4, 1fr); }
+  .widget-wrap { margin: 0 -16px; }
 }
 </style>

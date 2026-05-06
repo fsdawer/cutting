@@ -32,3 +32,9 @@ export const reservationApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
 }
+
+export const waitingApi = {
+  /** POST /api/waiting/stylists/{id}?date=&time= — 빈자리 알림 신청 */
+  register: (stylistProfileId, date, time) =>
+    api.post(`/api/waiting/stylists/${stylistProfileId}`, null, { params: { date, time } }),
+}

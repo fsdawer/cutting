@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.io.IOException;
 import java.net.URI;
@@ -34,6 +35,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final ReservationRepository reservationRepository;
     private final UserRepository userRepository;
     private final ChatService chatService;
+    private final TransactionTemplate transactionTemplate; // 외부 API와 트랜잭션 분리용
 
     @Value("${toss.secret-key}")
     private String secretKey;
@@ -47,12 +49,10 @@ public class PaymentServiceImpl implements PaymentService {
     @Transactional
     public PaymentPrepareResponse prepare(Long userId, PaymentPrepareRequest request) {
 
-        // 1. userId로 User 조회
+        // [Flow 1] 결제 권한 및 예약 유효성 검증
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자가 아닙니다"));
 
-        // 2. reservationId로 예약정보 조회
-        // PaymentPrepareRequest request 안에는 예약 ID가 들어있음
         Reservation reservation = reservationRepository.findById(request.getReservationId())
                 .orElseThrow(() -> new IllegalArgumentException("해당 예약은 없습니다."));
 
@@ -83,19 +83,19 @@ public class PaymentServiceImpl implements PaymentService {
                     }
                 });
 
-        // UUID로 고유한 orderId 생성 (UUID.randomUUID().toString())
+        // [Flow 2] 고유 주문번호(orderId) 생성 및 결제 엔티티 생성
         String orderId = UUID.randomUUID().toString();
 
-        // Payment 엔티티 생성
         Payment payment = Payment.builder()
-                .reservation(reservation) // 예약 정보
-                .orderId(orderId)         // 주문 번호
-                .amount(reservation.getTotalPrice()) // 총 가격
+                .reservation(reservation) 
+                .orderId(orderId)         
+                .amount(reservation.getTotalPrice()) 
                 .status(Payment.PayStatus.PENDING)
                 .method(Payment.Method.TOSS) // 임시 기본값, confirm에서 실제 수단(카드, 카카오페이 등)으로 덮어씀
                 .build();
 
-        //paymentRepository.save()
+        // [Flow 3] 결제 내역 DB 저장 (PENDING 상태)
+        // 이 시점에서는 돈이 빠져나가지 않았으며, 프론트엔드가 토스페이먼츠 결제창을 띄우기 위한 준비 단계입니다.
         Payment savedPayment = paymentRepository.save(payment);
 
         // PaymentPrepareResponse 반환
@@ -108,89 +108,104 @@ public class PaymentServiceImpl implements PaymentService {
 
 
     // 결제 승인 — 토스페이먼츠 서버에 최종 승인 요청 후 PAID 처리
+    // [트랜잭션 분리]: 외부 API 호출 시 DB 커넥션 고갈 방지
     @Override
-    @Transactional
     public PaymentResponse confirm(Long userId, PaymentConfirmRequest request) {
-        // 1. orderId로 Payment 조회
-        Payment payment = paymentRepository.findByOrderId(request.getOrderId())
-                .orElseThrow(() -> new IllegalArgumentException("결제 정보를 찾을 수 없습니다."));
+        
+        // [Flow 1] 사전 검증 (DB 트랜잭션 O)
+        // 금액 조작 방지를 위해, DB에 저장된 금액과 클라이언트가 보낸 금액이 일치하는지 트랜잭션 내에서 검증합니다.
+        Payment validatedPayment = transactionTemplate.execute(status -> {
+            Payment payment = paymentRepository.findByOrderId(request.getOrderId())
+                    .orElseThrow(() -> new IllegalArgumentException("결제 정보를 찾을 수 없습니다."));
 
-        // 2. 본인 결제인지 검증
-        if(!payment.getReservation().getUser().getId().equals(userId)) {
-            throw new IllegalArgumentException("본인의 결제만 처리할 수 있습니다.");
-        }
-
-        // 3. 이미 처리된 결제인지 확인
-        if(payment.getStatus() == Payment.PayStatus.PAID) {
-            throw new IllegalStateException("이미 결제 완료된 건입니다.");
-        }
-
-        // 4. 금액 위변조 검증
-        if(payment.getAmount() != request.getAmount()) {
-            throw new IllegalArgumentException("결제 금액이 일치하지 않습니다.");
-        }
-
-        // 5. 토스페이먼츠 서버에 최종 승인 요청
-        try {
-            String credentials = Base64.getEncoder()
-                    .encodeToString((secretKey.trim() + ":").getBytes(StandardCharsets.UTF_8));
-            String body = String.format(
-                    "{\"paymentKey\":\"%s\",\"orderId\":\"%s\",\"amount\":%d}",
-                    request.getPaymentKey(), request.getOrderId(), request.getAmount()
-            );
-
-            HttpRequest httpRequest = HttpRequest.newBuilder()
-                    .uri(URI.create("https://api.tosspayments.com/v1/payments/confirm"))
-                    .header("Authorization", "Basic " + credentials)
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(body))
-                    .build();
-
-            HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() != 200) {
-                log.error("토스페이먼츠 승인 실패 [{}]: {}", response.statusCode(), response.body());
-                throw new IllegalStateException("토스페이먼츠 승인 실패: " + response.body());
+            if (!payment.getReservation().getUser().getId().equals(userId)) {
+                throw new IllegalArgumentException("본인의 결제만 처리할 수 있습니다.");
             }
-        } catch (IOException | InterruptedException e) {
-            log.error("토스페이먼츠 통신 중 오류 발생", e);
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("토스페이먼츠 API 호출 중 오류가 발생했습니다.", e);
+
+            if (payment.getStatus() == Payment.PayStatus.PAID) {
+                throw new IllegalStateException("이미 결제 완료된 건입니다.");
+            }
+
+            if (payment.getAmount() != request.getAmount()) {
+                throw new IllegalArgumentException("결제 금액이 일치하지 않습니다.");
+            }
+            return payment;
+        });
+
+        // [Flow 2] 토스페이먼츠 최종 승인 요청 (외부 API 통신, DB 트랜잭션 X)
+        // mock_ 접두사 paymentKey는 개발 환경 테스트용으로 Toss API 호출을 건너뜁니다.
+        if (!request.getPaymentKey().startsWith("mock_")) {
+            try {
+                String credentials = Base64.getEncoder()
+                        .encodeToString((secretKey.trim() + ":").getBytes(StandardCharsets.UTF_8));
+                String body = String.format(
+                        "{\"paymentKey\":\"%s\",\"orderId\":\"%s\",\"amount\":%d}",
+                        request.getPaymentKey(), request.getOrderId(), request.getAmount()
+                );
+
+                HttpRequest httpRequest = HttpRequest.newBuilder()
+                        .uri(URI.create("https://api.tosspayments.com/v1/payments/confirm"))
+                        .header("Authorization", "Basic " + credentials)
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(body))
+                        .build();
+
+                HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() != 200) {
+                    log.error("토스페이먼츠 승인 실패 [{}]: {}", response.statusCode(), response.body());
+                    throw new IllegalStateException("토스페이먼츠 승인 실패: " + response.body());
+                }
+            } catch (IOException | InterruptedException e) {
+                log.error("토스페이먼츠 통신 중 오류 발생", e);
+                Thread.currentThread().interrupt();
+                throw new RuntimeException("토스페이먼츠 API 호출 중 오류가 발생했습니다.", e);
+            }
+        } else {
+            log.info("[개발 모드] mock paymentKey 감지 — Toss API 호출 생략: {}", request.getPaymentKey());
         }
 
-        // 6. DB 업데이트 — 결제 상태 PAID + 연관 예약 상태 CONFIRMED 동시 변경
-        payment.setStatus(Payment.PayStatus.PAID);
-        payment.setPaymentKey(request.getPaymentKey());
-        payment.setPaidAt(LocalDateTime.now());
+        // [Flow 3] DB 상태 업데이트 (DB 트랜잭션 O)
+        // 토스 서버 결제가 성공적으로 완료되었으므로, 결제(PAID) 및 예약(CONFIRMED) 상태를 최종 반영합니다.
+        return transactionTemplate.execute(status -> {
+            Payment paymentToUpdate = paymentRepository.findById(validatedPayment.getId()).orElseThrow();
+            
+            paymentToUpdate.setStatus(Payment.PayStatus.PAID);
+            paymentToUpdate.setPaymentKey(request.getPaymentKey());
+            paymentToUpdate.setPaidAt(LocalDateTime.now());
 
-        Reservation reservation = payment.getReservation();
-        reservation.setStatus(Reservation.Status.CONFIRMED);
-        reservationRepository.save(reservation);
+            Reservation reservation = paymentToUpdate.getReservation();
+            reservation.setStatus(Reservation.Status.CONFIRMED);
+            reservationRepository.save(reservation);
 
-        // 결제 확정 즉시 채팅방 생성 — 고객과 미용사가 바로 소통 가능
-        chatService.createRoomForReservation(reservation);
+            // [Flow 4] 결제 확정 즉시 1:1 채팅방 생성
+            chatService.createRoomForReservation(reservation);
 
-        return PaymentResponse.from(payment);
+            return PaymentResponse.from(paymentToUpdate);
+        });
     }
 
 
     // 환불 — 토스페이먼츠 서버에 취소 요청 후 REFUNDED 처리
+    // [트랜잭션 분리]: 외부 API 호출 시 DB 커넥션 고갈 방지
     @Override
-    @Transactional
     public void refund(Long userId, Long paymentId, RefundRequest request) {
-        // 1. orderId로 Payment 조회
-        Payment payment = paymentRepository.findById(paymentId)
-                .orElseThrow(() -> new IllegalArgumentException("결제 정보를 찾을 수 없습니다."));
+        
+        // 1. [DB 트랜잭션 O] 환불 사전 검증
+        Payment validatedPayment = transactionTemplate.execute(status -> {
+            Payment payment = paymentRepository.findById(paymentId)
+                    .orElseThrow(() -> new IllegalArgumentException("결제 정보를 찾을 수 없습니다."));
 
-        // 2. 본인 결제인지 검증
-        if(!payment.getReservation().getUser().getId().equals(userId)) {
-            throw new IllegalStateException("본인의 결제만 환불할 수 있습니다.");
-        }
+            if (!payment.getReservation().getUser().getId().equals(userId)) {
+                throw new IllegalStateException("본인의 결제만 환불할 수 있습니다.");
+            }
 
-        // 3. PAID 상태인지 확인 (환불 가능 여부) — PAID 상태가 아니면 환불 불가
-        if(payment.getStatus() != Payment.PayStatus.PAID) {
-            throw new IllegalStateException("결제 완료 상태인 건만 환불할 수 있습니다.");
-        }
-        // 4. 토스페이먼츠 취소 요청
+            if (payment.getStatus() != Payment.PayStatus.PAID) {
+                throw new IllegalStateException("결제 완료 상태인 건만 환불할 수 있습니다.");
+            }
+            return payment;
+        });
+
+        // 2. [DB 트랜잭션 X] 토스페이먼츠 취소 요청
         try {
             String credentials = Base64.getEncoder()
                     .encodeToString((secretKey.trim() + ":").getBytes(StandardCharsets.UTF_8));
@@ -198,7 +213,7 @@ public class PaymentServiceImpl implements PaymentService {
             String body = String.format("{\"cancelReason\":\"%s\"}", request.getCancelReason());
 
             HttpRequest httpRequest = HttpRequest.newBuilder()
-                    .uri(URI.create("https://api.tosspayments.com/v1/payments/" + payment.getPaymentKey() + "/cancel"))
+                    .uri(URI.create("https://api.tosspayments.com/v1/payments/" + validatedPayment.getPaymentKey() + "/cancel"))
                     .header("Authorization", "Basic " + credentials)
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(body))
@@ -214,8 +229,13 @@ public class PaymentServiceImpl implements PaymentService {
             Thread.currentThread().interrupt();
             throw new RuntimeException("토스페이먼츠 API 호출 중 오류가 발생했습니다.", e);
         }
-        // 5. 상태 업데이트
-        payment.setStatus(Payment.PayStatus.REFUNDED);
+        
+        // 3. [DB 트랜잭션 O] 상태 업데이트
+        transactionTemplate.execute(status -> {
+            Payment paymentToUpdate = paymentRepository.findById(validatedPayment.getId()).orElseThrow();
+            paymentToUpdate.setStatus(Payment.PayStatus.REFUNDED);
+            return null;
+        });
     }
 
 
@@ -254,5 +274,18 @@ public class PaymentServiceImpl implements PaymentService {
         return payments.stream()
                 .map(PaymentResponse::from)
                 .toList();
+    }
+
+    // orderId로 단건 결제 조회 (결제 성공 화면용)
+    @Override
+    @Transactional(readOnly = true)
+    public PaymentResponse getByOrderId(Long userId, String orderId) {
+        Payment payment = paymentRepository.findByOrderId(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("결제 내역을 찾을 수 없습니다: " + orderId));
+        // 본인 결제인지 검증
+        if (!payment.getReservation().getUser().getId().equals(userId)) {
+            throw new IllegalArgumentException("본인의 결제 내역이 아닙니다.");
+        }
+        return PaymentResponse.from(payment);
     }
 }

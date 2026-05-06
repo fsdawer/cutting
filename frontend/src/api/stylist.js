@@ -28,4 +28,8 @@ export const stylistApi = {
 
   /** PUT /api/stylists/me/hours — 영업시간 수정 (요일 하나 단위) */
   updateHours: (data) => api.put('/api/stylists/me/hours', data),
+
+  /** GET /api/stylists/nearby — 위치 기반 주변 미용사 조회 */
+  getNearbyStylists: (lat, lng, radius = 3000) =>
+    api.get('/api/stylists/nearby', { params: { lat, lng, radius } }),
 }

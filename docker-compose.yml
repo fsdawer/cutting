@@ -1,55 +1,29 @@
 services:
-  # ── MySQL ──────────────────────────────────────────
-  db:
-    image: mysql:8.0
-    container_name: cutting-db
-    restart: unless-stopped
-    environment:
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
-      MYSQL_DATABASE: Beauty
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
     volumes:
-      - db-data:/var/lib/mysql
-      - ./sql/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
-      - ./sql/data.sql:/docker-entrypoint-initdb.d/02-data.sql
-    ports:
-      - "3306:3306"
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${DB_PASSWORD}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
-  # ── Spring Boot 백엔드 ──────────────────────────────
-  backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: cutting-backend
-    restart: unless-stopped
-    depends_on:
-      db:
-        condition: service_healthy
-    env_file:
-      - .env
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/Beauty?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
     volumes:
-      - uploads:/app/uploads
-    ports:
-      - "8080:8080"
-
-  # ── Vue.js 프론트엔드 (Nginx) ───────────────────────
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: cutting-frontend
-    restart: unless-stopped
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
     depends_on:
-      - backend
-    ports:
-      - "80:80"
+      - prometheus
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
 volumes:
-  db-data:
-  uploads:
+  grafana-data:

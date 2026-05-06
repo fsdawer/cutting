@@ -35,4 +35,8 @@ public class StylistProfile {
     @Builder.Default
     @Column(name = "review_count", nullable = false)
     private int reviewCount = 0;
+
+    @Builder.Default
+    @Column(name = "favorite_count", nullable = false)
+    private int favoriteCount = 0;
 }

@@ -25,4 +25,6 @@ public interface StylistService {
     void deleteService(Long userId, Long serviceId);
 
     WorkingHoursResponse updateHours(Long userId, WorkingHoursRequest request);
+
+    List<StylistProfileResponse> getNearbyStylists(double lat, double lng, int radius);
 }

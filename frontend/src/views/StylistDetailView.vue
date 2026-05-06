@@ -1,166 +1,160 @@
 <template>
   <main class="page">
-    <div v-if="loading" class="loading-screen">
+    <div v-if="loading" class="state-center" style="min-height:50vh">
       <div class="spinner"></div>
     </div>
 
-    <template v-else-if="error">
-      <div class="container state-center">
-        <p class="state-icon">⚠️</p>
-        <p class="state-text">{{ error }}</p>
-        <button class="btn btn-ghost" @click="$router.back()">돌아가기</button>
-      </div>
-    </template>
+    <div v-else-if="!stylist" class="state-center">
+      <p class="state-text">스타일리스트를 찾을 수 없습니다.</p>
+    </div>
 
     <template v-else>
-      <div class="container">
-        <button class="back-btn" @click="$router.back()">← 목록으로</button>
-
-        <div class="detail-layout">
-          <!-- Left: Profile -->
-          <aside class="profile-aside">
-            <div class="card profile-card">
-              <div class="profile-cover"></div>
-              <img
-                :src="stylist.profileImg || `https://i.pravatar.cc/200?u=${stylist.id}`"
-                class="profile-avatar"
-                :alt="stylist.name"
-              />
-              <div class="profile-body">
-                <p class="profile-salon">{{ stylist.salonName }}</p>
-                <h1 class="profile-name">{{ stylist.name }}</h1>
-                <div class="profile-rating">
-                  <span class="star">★</span>
-                  <span class="rating-num">{{ stylist.rating?.toFixed(1) ?? '0.0' }}</span>
-                  <span class="rating-cnt">({{ stylist.reviewCount ?? 0 }})</span>
-                </div>
-                <p class="profile-location">📍 {{ stylist.location }}</p>
-                <p class="profile-phone" v-if="stylist.salonPhone">📞 {{ stylist.salonPhone }}</p>
-                <p class="profile-exp" v-if="stylist.experience">경력 {{ stylist.experience }}년</p>
-                <p class="profile-salon-desc" v-if="stylist.salonDescription">{{ stylist.salonDescription }}</p>
-                <p class="profile-bio" v-if="stylist.bio">{{ stylist.bio }}</p>
-
-                <RouterLink v-if="isLoggedIn" :to="`/booking/${stylist.id}`" class="btn btn-primary btn-full" style="margin-top:16px;">
-                  예약하기
-                </RouterLink>
-                <RouterLink v-else to="/login" class="btn btn-primary btn-full" style="margin-top:16px;">
-                  로그인 후 예약하기
-                </RouterLink>
+      <!-- 프로필 헤더 -->
+      <section class="profile-hero">
+        <div class="container">
+          <button class="back-link" @click="$router.back()">← 뒤로가기</button>
+          <div class="profile-layout">
+            <div class="profile-img-wrap">
+              <img :src="stylist.profileImg || `https://i.pravatar.cc/160?u=${stylist.id}`" :alt="stylist.name" class="profile-img" />
+            </div>
+            <div class="profile-info">
+              <div class="profile-badges">
+                <span class="badge badge-accent">경력 {{ stylist.experience }}년</span>
+                <span v-if="stylist.rating >= 4.5" class="badge badge-gold">Top Rated</span>
               </div>
-            </div>
-
-            <div class="card hours-card" v-if="workingHours.length">
-              <h3 class="card-sub-title">영업시간</h3>
-              <ul class="hours-list">
-                <li v-for="h in workingHours" :key="h.dayOfWeek" class="hours-item">
-                  <span class="day-name">{{ dayName(h.dayOfWeek) }}</span>
-                  <span :class="h.isDayOff ? 'time-closed' : 'time-open'">
-                    {{ h.isDayOff ? '휴무' : formatHours(h.openTime, h.closeTime) }}
-                  </span>
-                </li>
-              </ul>
-            </div>
-          </aside>
-
-          <!-- Right: Content -->
-          <section class="detail-content">
-            <div class="card content-card" v-if="services.length">
-              <h2 class="content-title">서비스 &amp; 가격</h2>
-              <div class="service-list">
-                <div v-for="service in services" :key="service.id" class="service-row">
-                  <div>
-                    <p class="svc-name">{{ service.name }}</p>
-                    <p class="svc-meta" v-if="service.durationMinutes">⏱ {{ service.durationMinutes }}분</p>
-                    <p class="svc-desc" v-if="service.description">{{ service.description }}</p>
-                  </div>
-                  <span class="svc-price">{{ service.price?.toLocaleString() }}원</span>
-                </div>
+              <h1 class="profile-name">{{ stylist.name }}</h1>
+              <p class="profile-salon">{{ stylist.salonName }}</p>
+              <p class="profile-location">{{ stylist.location }}</p>
+              <div class="profile-rating">
+                <span class="stars">★★★★★</span>
+                <span class="rating-num">{{ stylist.rating?.toFixed(1) }}</span>
+                <span class="rating-cnt">리뷰 {{ reviews.length }}개</span>
               </div>
-            </div>
-
-            <div class="card content-card" v-if="!services.length">
-              <p class="no-content">아직 등록된 서비스가 없습니다.</p>
-            </div>
-
-            <!-- 리뷰 탭 -->
-            <div class="card content-card">
-              <h2 class="content-title">
-                리뷰
-                <span class="review-count-badge">{{ reviews.length }}</span>
-              </h2>
-
-              <!-- 리뷰 작성 폼 -->
-              <div v-if="canWriteReview" class="review-form-wrap">
-                <p class="review-form-hint">완료된 예약에 대한 리뷰를 남겨보세요.</p>
-                <div class="star-row">
-                  <button
-                    v-for="n in 5" :key="n"
-                    class="star-btn"
-                    :class="{ filled: n <= newRating }"
-                    @click="newRating = n"
-                  >★</button>
-                </div>
-                <textarea
-                  v-model="newContent"
-                  class="review-textarea"
-                  placeholder="리뷰 내용을 입력하세요"
-                  rows="3"
-                ></textarea>
-                <p v-if="reviewError" class="review-error">{{ reviewError }}</p>
-                <button class="btn btn-primary btn-sm" :disabled="reviewSubmitting" @click="submitReview">
-                  {{ reviewSubmitting ? '등록 중...' : '리뷰 등록' }}
+              <p class="profile-bio">{{ stylist.bio }}</p>
+              <div class="profile-actions">
+                <RouterLink :to="`/booking/${stylist.id}`" class="btn btn-primary btn-lg">예약하기</RouterLink>
+                <button class="btn btn-ghost" @click="toggleFavorite">
+                  {{ isFavorited ? '찜 취소' : '찜하기' }}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
-              <!-- 내가 쓴 리뷰 -->
-              <div v-if="myReview" class="review-item my-review">
-                <div class="review-header">
-                  <img :src="myReview.userProfileImg || `https://i.pravatar.cc/36?u=${myReview.userId}`" class="review-avatar" />
-                  <div>
-                    <p class="review-author">{{ myReview.userName }} <span class="my-badge">내 리뷰</span></p>
+      <div class="container detail-body">
+        <!-- 오늘 빈자리 -->
+        <section class="available-section card" v-if="availableSlots.length > 0 || slotsLoading">
+          <div class="avail-header">
+            <h2 class="card-title">오늘 빈자리</h2>
+            <span class="avail-date">{{ todayLabel }}</span>
+          </div>
+          <div v-if="slotsLoading" class="slots-loading">
+            <div class="spinner" style="width:20px;height:20px;border-width:2px"></div>
+          </div>
+          <div v-else-if="availableSlots.length === 0" class="slots-empty">오늘 예약 가능한 시간이 없습니다.</div>
+          <div v-else class="slots-grid">
+            <span
+              v-for="slot in availableSlots"
+              :key="slot"
+              class="slot-chip"
+              @click="goBookWithSlot(slot)"
+            >{{ slot }}</span>
+          </div>
+        </section>
+
+        <div class="detail-grid">
+          <!-- 좌측 콘텐츠 -->
+          <div class="detail-main">
+            <!-- 서비스 -->
+            <section class="card">
+              <h2 class="card-title">서비스 메뉴</h2>
+              <div class="service-tabs">
+                <button
+                  v-for="cat in serviceCategories"
+                  :key="cat"
+                  class="svc-tab"
+                  :class="{ active: activeCategory === cat }"
+                  @click="activeCategory = cat"
+                >{{ cat }}</button>
+              </div>
+              <div class="svc-list">
+                <RouterLink
+                  v-for="svc in filteredServices"
+                  :key="svc.id"
+                  :to="`/booking/${stylist.id}?serviceId=${svc.id}`"
+                  class="svc-item"
+                >
+                  <div class="svc-info">
+                    <p class="svc-name">{{ svc.name }}</p>
+                    <p class="svc-desc">{{ svc.description }}</p>
+                    <p class="svc-duration">{{ svc.durationMinutes }}분</p>
+                  </div>
+                  <div class="svc-right">
+                    <p class="svc-price">{{ svc.price?.toLocaleString() }}원</p>
+                    <span class="svc-book">예약 →</span>
+                  </div>
+                </RouterLink>
+              </div>
+            </section>
+
+            <!-- 리뷰 -->
+            <section class="card reviews-card">
+              <div class="card-header-row">
+                <h2 class="card-title">리뷰 {{ reviews.length }}개</h2>
+                <div class="avg-rating">
+                  <span class="avg-num">{{ avgRating }}</span>
+                  <span class="stars">★★★★★</span>
+                </div>
+              </div>
+              <div v-if="reviews.length === 0" class="state-center" style="padding:32px 0">
+                <p class="state-text">아직 리뷰가 없습니다.</p>
+              </div>
+              <div v-else class="review-list">
+                <div v-for="r in reviews" :key="r.id" class="review-item">
+                  <div class="review-top">
+                    <div class="review-user">
+                      <div class="user-avatar">{{ r.userName?.[0] ?? 'U' }}</div>
+                      <div>
+                        <p class="user-name">{{ r.userName }}</p>
+                        <p class="review-date">{{ formatDate(r.createdAt) }}</p>
+                      </div>
+                    </div>
                     <div class="review-stars">
-                      <span v-for="n in 5" :key="n" class="star-text" :class="{ filled: n <= myReview.rating }">★</span>
+                      <span v-for="i in 5" :key="i" class="star-item" :class="{ filled: i <= r.rating }">★</span>
                     </div>
                   </div>
-                  <div class="review-actions">
-                    <button class="btn btn-ghost btn-xs" @click="startEdit">수정</button>
-                    <button class="btn btn-ghost btn-xs" style="color:var(--red)" @click="deleteMyReview">삭제</button>
-                  </div>
+                  <p class="review-content">{{ r.content }}</p>
                 </div>
-                <div v-if="editMode" class="edit-form-wrap">
-                  <div class="star-row">
-                    <button v-for="n in 5" :key="n" class="star-btn" :class="{ filled: n <= editRating }" @click="editRating = n">★</button>
-                  </div>
-                  <textarea v-model="editContent" class="review-textarea" rows="3"></textarea>
-                  <div class="edit-actions">
-                    <button class="btn btn-ghost btn-sm" @click="editMode = false">취소</button>
-                    <button class="btn btn-primary btn-sm" @click="saveEdit">저장</button>
-                  </div>
-                </div>
-                <p v-else class="review-content">{{ myReview.content }}</p>
-                <p class="review-date">{{ formatDate(myReview.createdAt) }}</p>
               </div>
+            </section>
+          </div>
 
-              <!-- 리뷰 목록 -->
-              <div v-if="otherReviews.length === 0 && !myReview" class="no-content">
-                아직 리뷰가 없습니다.
-              </div>
-              <div v-for="r in otherReviews" :key="r.id" class="review-item">
-                <div class="review-header">
-                  <img :src="r.userProfileImg || `https://i.pravatar.cc/36?u=${r.userId}`" class="review-avatar" />
-                  <div>
-                    <p class="review-author">{{ r.userName }}</p>
-                    <div class="review-stars">
-                      <span v-for="n in 5" :key="n" class="star-text" :class="{ filled: n <= r.rating }">★</span>
-                    </div>
-                  </div>
-                  <p class="review-service-badge">{{ r.serviceName }}</p>
+          <!-- 우측 사이드바 -->
+          <aside class="detail-sidebar">
+            <!-- 영업시간 -->
+            <div class="card">
+              <h2 class="card-title">영업시간</h2>
+              <div class="hours-list">
+                <div
+                  v-for="h in workingHours"
+                  :key="h.dayOfWeek"
+                  class="hour-row"
+                  :class="{ today: isToday(h.dayOfWeek) }"
+                >
+                  <span class="hour-day">{{ dayName(h.dayOfWeek) }}</span>
+                  <span v-if="h.isDayOff" class="hour-off">휴무</span>
+                  <span v-else class="hour-time">{{ h.openTime?.slice(0,5) }} – {{ h.closeTime?.slice(0,5) }}</span>
                 </div>
-                <p class="review-content">{{ r.content }}</p>
-                <p class="review-date">{{ formatDate(r.createdAt) }}</p>
               </div>
             </div>
-          </section>
+
+            <!-- 예약 CTA -->
+            <div class="card cta-card">
+              <p class="cta-label">지금 바로 예약하세요</p>
+              <RouterLink :to="`/booking/${stylist.id}`" class="btn btn-primary btn-full">예약하기</RouterLink>
+            </div>
+          </aside>
         </div>
       </div>
     </template>
@@ -169,247 +163,222 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { stylistApi } from '@/api/stylist'
 import { reviewApi } from '@/api/review'
 import { reservationApi } from '@/api/reservation'
-import { useAuthStore } from '@/stores/authStore'
+import api from '@/api/index'
 
-const route     = useRoute()
-const authStore = useAuthStore()
-const isLoggedIn = computed(() => authStore.isLoggedIn)
+const route  = useRoute()
+const router = useRouter()
 
-const loading  = ref(true)
-const error    = ref('')
-const stylist  = ref({})
-const services = ref([])
-const workingHours = ref([])
+const stylist       = ref(null)
+const reviews       = ref([])
+const workingHours  = ref([])
+const loading       = ref(true)
+const activeCategory = ref('전체')
+const isFavorited   = ref(false)
+const availableSlots = ref([])
+const slotsLoading  = ref(false)
 
-// 리뷰
-const reviews    = ref([])
-const newRating  = ref(5)
-const newContent = ref('')
-const reviewError      = ref('')
-const reviewSubmitting = ref(false)
-const eligibleReservationId = ref(null) // 리뷰 작성 가능한 예약 ID
+const today = new Date()
+const todayLabel = `${today.getMonth() + 1}월 ${today.getDate()}일 (${['일','월','화','수','목','금','토'][today.getDay()]})`
 
-const myReview    = computed(() => reviews.value.find(r => r.userId === authStore.user?.id) ?? null)
-const otherReviews = computed(() => reviews.value.filter(r => r.userId !== authStore.user?.id))
-const canWriteReview = computed(() => isLoggedIn.value && !myReview.value && !!eligibleReservationId.value)
+const serviceCategories = computed(() => {
+  const cats = [...new Set((stylist.value?.services || []).map(s => s.category))]
+  return ['전체', ...cats]
+})
 
-const editMode    = ref(false)
-const editRating  = ref(5)
-const editContent = ref('')
+const filteredServices = computed(() => {
+  if (!stylist.value?.services) return []
+  if (activeCategory.value === '전체') return stylist.value.services
+  return stylist.value.services.filter(s => s.category === activeCategory.value)
+})
 
-function startEdit() {
-  editRating.value  = myReview.value.rating
-  editContent.value = myReview.value.content
-  editMode.value = true
-}
+const avgRating = computed(() => {
+  if (!reviews.value.length) return '-'
+  return (reviews.value.reduce((s, r) => s + r.rating, 0) / reviews.value.length).toFixed(1)
+})
 
-async function loadEligibleReservation() {
-  if (!isLoggedIn.value) return
-  try {
-    const { data } = await reservationApi.getMyReservations()
-    const stylistId = Number(route.params.id)
-    const done = data.find(r => r.stylistId === stylistId && r.status === 'DONE')
-    eligibleReservationId.value = done?.id ?? null
-  } catch (e) { console.error(e) }
-}
-
-async function submitReview() {
-  if (!newRating.value) { reviewError.value = '별점을 선택하세요.'; return }
-  if (!eligibleReservationId.value) { reviewError.value = '완료된 예약이 있어야 리뷰를 작성할 수 있습니다.'; return }
-  reviewSubmitting.value = true; reviewError.value = ''
-  try {
-    await reviewApi.create({ reservationId: eligibleReservationId.value, rating: newRating.value, content: newContent.value })
-    newContent.value = ''; newRating.value = 5
-    await loadReviews()
-  } catch (e) {
-    reviewError.value = e.response?.data?.message || '리뷰 등록 중 오류가 발생했습니다.'
-  } finally { reviewSubmitting.value = false }
-}
-
-async function saveEdit() {
-  try {
-    await reviewApi.update(myReview.value.id, { rating: editRating.value, content: editContent.value })
-    editMode.value = false
-    await loadReviews()
-  } catch (e) { alert(e.response?.data?.message || '수정 중 오류가 발생했습니다.') }
-}
-
-async function deleteMyReview() {
-  if (!confirm('리뷰를 삭제하시겠습니까?')) return
-  try {
-    await reviewApi.remove(myReview.value.id)
-    await loadReviews()
-  } catch (e) { alert(e.response?.data?.message || '삭제 중 오류가 발생했습니다.') }
-}
-
-async function loadReviews() {
-  try {
-    const res = await reviewApi.getByStylist(route.params.id)
-    reviews.value = res.data
-  } catch (e) { console.error(e) }
-}
-
-const DAY_NAMES = ['월', '화', '수', '목', '금', '토', '일']
-const dayName = (idx) => DAY_NAMES[idx] ?? String(idx)
-const formatHours = (open, close) => (!open || !close) ? '미설정' : `${open.slice(0,5)} - ${close.slice(0,5)}`
+function dayName(d) { return ['일','월','화','수','목','금','토'][d] }
+function isToday(d) { return d === today.getDay() }
 function formatDate(str) {
   if (!str) return ''
   const d = new Date(str)
   return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`
 }
 
-onMounted(async () => {
+async function loadAvailableSlots() {
+  const id = route.params.id
+  const todayStr = today.toISOString().slice(0, 10)
+  slotsLoading.value = true
   try {
-    const [profileRes] = await Promise.all([
-      stylistApi.getStylist(route.params.id),
-      loadReviews(),
-      loadEligibleReservation(),
-    ])
-    const data = profileRes.data
-    stylist.value      = data
-    services.value     = data.services ?? []
-    workingHours.value = (data.workingHours ?? []).sort((a, b) => a.dayOfWeek - b.dayOfWeek)
+    const res = await reservationApi.getBookedTimes(id, todayStr)
+    const bookedTimes = res.data || []
+    const todayHours = workingHours.value.find(h => h.dayOfWeek === today.getDay())
+    if (!todayHours || todayHours.isDayOff) { availableSlots.value = []; return }
+    const open  = parseInt(todayHours.openTime?.slice(0, 2) || '10')
+    const close = parseInt(todayHours.closeTime?.slice(0, 2) || '19')
+    const slots = []
+    for (let h = open; h < close; h++) {
+      const slot = `${String(h).padStart(2,'0')}:00`
+      if (!bookedTimes.includes(slot)) slots.push(slot)
+    }
+    availableSlots.value = slots.slice(0, 8)
+  } catch { availableSlots.value = [] }
+  finally { slotsLoading.value = false }
+}
+
+function goBookWithSlot(slot) {
+  router.push({ path: `/booking/${stylist.value.id}`, query: { time: slot } })
+}
+
+async function toggleFavorite() {
+  try {
+    const res = await api.post(`/api/favorites/stylists/${stylist.value.id}`)
+    isFavorited.value = res.data?.includes('완료')
   } catch (e) {
-    error.value = '스타일리스트 정보를 불러오지 못했습니다.'
-    console.error(e)
-  } finally {
-    loading.value = false
+    if (!isFavorited.value) alert(e.response?.data?.message || '로그인이 필요합니다.')
   }
+}
+
+onMounted(async () => {
+  const id = route.params.id
+  try {
+    const [stylistRes, reviewRes] = await Promise.all([
+      stylistApi.getStylist(id),
+      reviewApi.getByStylist(id),
+    ])
+    stylist.value = stylistRes.data
+    reviews.value = reviewRes.data || []
+    workingHours.value = stylist.value.workingHours || []
+    await loadAvailableSlots()
+  } catch { stylist.value = null }
+  finally { loading.value = false }
 })
 </script>
 
 <style scoped>
-.loading-screen { display: flex; justify-content: center; align-items: center; height: 400px; }
-.back-btn {
-  background: none; border: none;
-  color: var(--text-sub); font-size: 14px;
-  padding: 8px 0; cursor: pointer;
-  margin-bottom: 20px; display: block;
+/* Hero */
+.profile-hero {
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  padding: 24px 0 32px;
+}
+.back-link {
+  display: inline-block; margin-bottom: 20px;
+  font-size: 13px; color: var(--text-muted);
+  background: none; border: none; cursor: pointer; padding: 0;
   transition: var(--transition);
 }
-.back-btn:hover { color: var(--primary); }
+.back-link:hover { color: var(--text); }
 
-.state-center { text-align: center; padding: 80px 0; display: flex; flex-direction: column; align-items: center; gap: 12px; }
-.state-icon { font-size: 44px; }
-.state-text { color: var(--text-sub); }
+.profile-layout { display: flex; gap: 32px; align-items: flex-start; }
+.profile-img-wrap { flex-shrink: 0; }
+.profile-img { width: 140px; height: 140px; border-radius: var(--radius-lg); object-fit: cover; border: 1px solid var(--border); }
 
-.detail-layout {
-  display: grid;
-  grid-template-columns: 280px 1fr;
-  gap: 20px;
-  align-items: start;
-}
-
-/* Profile aside */
-.profile-card { padding: 0; overflow: hidden; margin-bottom: 14px; }
-.profile-cover { height: 90px; background: var(--bg); }
-.profile-avatar {
-  width: 80px; height: 80px;
-  border-radius: 50%; object-fit: cover;
-  border: 3px solid #fff;
-  margin: -40px 0 0 18px;
-  box-shadow: var(--shadow-md);
-}
-.profile-body  { padding: 12px 18px 22px; }
-.profile-salon { font-size: 12px; font-weight: 600; color: var(--primary); letter-spacing: 0.02em; margin-bottom: 2px; }
-.profile-name  { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
-.profile-rating { display: flex; align-items: center; gap: 4px; margin-bottom: 8px; }
-.star { color: #FFCC00; font-size: 15px; }
-.rating-num { font-weight: 700; font-size: 14px; }
+.profile-info { flex: 1; }
+.profile-badges { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+.profile-name { font-size: 28px; font-weight: 800; letter-spacing: -0.03em; margin-bottom: 4px; }
+.profile-salon { font-size: 15px; font-weight: 600; color: var(--accent); margin-bottom: 2px; }
+.profile-location { font-size: 13px; color: var(--text-muted); margin-bottom: 12px; }
+.profile-rating { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.rating-num { font-size: 16px; font-weight: 800; }
 .rating-cnt { font-size: 13px; color: var(--text-muted); }
-.profile-location { font-size: 13px; color: var(--text-muted); margin-bottom: 3px; }
-.profile-phone    { font-size: 13px; color: var(--text-muted); margin-bottom: 3px; }
-.profile-exp      { font-size: 13px; color: var(--text-sub); margin-bottom: 6px; }
-.profile-salon-desc { font-size: 12px; color: var(--text-muted); line-height: 1.6; margin-bottom: 6px; padding: 8px; background: var(--bg); border-radius: var(--radius-sm); }
-.profile-bio  { font-size: 13px; color: var(--text-sub); line-height: 1.7; margin-top: 8px; }
+.profile-bio { font-size: 14px; color: var(--text-sub); line-height: 1.7; margin-bottom: 20px; max-width: 480px; }
+.profile-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 
-.hours-card { padding: 18px; }
-.card-sub-title { font-size: 14px; font-weight: 700; margin-bottom: 12px; }
-.hours-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
-.hours-item { display: flex; justify-content: space-between; font-size: 13px; }
-.day-name   { color: var(--text-sub); }
-.time-open  { color: var(--text); font-weight: 500; }
-.time-closed { color: var(--red); font-weight: 500; }
+/* Body */
+.detail-body { padding-top: 28px; }
+.detail-grid { display: grid; grid-template-columns: 1fr 300px; gap: 20px; }
+.detail-main { display: flex; flex-direction: column; gap: 20px; }
+.detail-sidebar { display: flex; flex-direction: column; gap: 16px; position: sticky; top: 76px; }
 
-/* Content */
-.content-card { margin-bottom: 16px; }
-.content-title { font-size: 17px; font-weight: 700; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
-
-.service-list { display: flex; flex-direction: column; }
-.service-row {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 14px 0; border-bottom: 1px solid var(--border);
+/* Available slots */
+.available-section { margin-bottom: 20px; }
+.avail-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.avail-date { font-size: 13px; color: var(--text-muted); }
+.slots-loading { padding: 12px 0; display: flex; justify-content: center; }
+.slots-empty { font-size: 13px; color: var(--text-muted); padding: 8px 0; }
+.slots-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.slot-chip {
+  padding: 7px 14px; border-radius: var(--radius-md);
+  border: 1.5px solid var(--success); background: var(--success-light);
+  font-size: 13px; font-weight: 700; color: var(--success);
+  cursor: pointer; transition: var(--transition);
 }
-.service-row:last-child { border-bottom: none; }
-.svc-name  { font-size: 15px; font-weight: 600; }
-.svc-meta  { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-.svc-desc  { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-.svc-price { font-size: 15px; font-weight: 700; color: var(--primary); white-space: nowrap; margin-left: 16px; }
+.slot-chip:hover { background: var(--success); color: #fff; }
+
+/* Card title */
+.card-title { font-size: 17px; font-weight: 700; margin-bottom: 16px; letter-spacing: -0.02em; }
+.card-header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.avg-rating { display: flex; align-items: center; gap: 6px; }
+.avg-num { font-size: 22px; font-weight: 800; }
+
+/* Service tabs */
+.service-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+.svc-tab {
+  padding: 6px 14px; border-radius: var(--radius-full);
+  border: 1px solid var(--border); background: transparent;
+  font-size: 13px; font-weight: 500; color: var(--text-muted); cursor: pointer; transition: var(--transition);
+}
+.svc-tab:hover { border-color: var(--border-strong); color: var(--text-sub); }
+.svc-tab.active { border-color: var(--primary); background: var(--primary); color: #fff; }
+
+.svc-list { display: flex; flex-direction: column; gap: 2px; }
+.svc-item {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  padding: 14px 16px; border-radius: var(--radius-md);
+  border: 1px solid var(--border); background: var(--bg);
+  transition: var(--transition); gap: 12px;
+}
+.svc-item:hover { border-color: var(--primary); background: var(--bg-card); box-shadow: var(--shadow-sm); }
+.svc-info { flex: 1; }
+.svc-name { font-size: 15px; font-weight: 600; color: var(--text); }
+.svc-desc { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+.svc-duration { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.svc-right { text-align: right; flex-shrink: 0; }
+.svc-price { font-size: 16px; font-weight: 800; color: var(--text); }
+.svc-book { font-size: 12px; color: var(--accent); font-weight: 600; margin-top: 4px; display: block; }
 
 /* Reviews */
-.review-count-badge {
-  display: inline-flex; align-items: center; justify-content: center;
-  background: var(--primary); color: #fff;
-  font-size: 11px; font-weight: 700;
-  border-radius: var(--radius-full);
-  min-width: 20px; height: 20px; padding: 0 6px;
-  margin-left: 8px; vertical-align: middle;
+.review-list { display: flex; flex-direction: column; gap: 20px; }
+.review-item { padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+.review-item:last-child { border-bottom: none; padding-bottom: 0; }
+.review-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+.review-user { display: flex; gap: 10px; align-items: center; }
+.user-avatar {
+  width: 36px; height: 36px; border-radius: 50%; background: var(--bg-surface);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700; color: var(--text-sub); border: 1px solid var(--border);
+  flex-shrink: 0;
 }
-.review-form-wrap {
-  background: var(--bg); border-radius: var(--radius-sm);
-  padding: 16px; margin-bottom: 20px;
-  display: flex; flex-direction: column; gap: 10px;
-}
-.review-form-hint { font-size: 13px; color: var(--text-muted); }
-.star-row { display: flex; gap: 4px; }
-.star-btn {
-  font-size: 22px; background: none; border: none; cursor: pointer;
-  color: var(--border); transition: color 0.1s;
-  padding: 0; line-height: 1;
-}
-.star-btn.filled { color: #FFCC00; }
-.review-textarea {
-  width: 100%; border: 1.5px solid var(--border); border-radius: var(--radius-sm);
-  padding: 10px 12px; font-size: 14px; resize: vertical;
-  font-family: inherit;
-}
-.review-textarea:focus { outline: none; border-color: var(--primary); }
-.review-error { font-size: 13px; color: var(--red); }
-
-.review-item {
-  padding: 16px 0; border-bottom: 1px solid var(--border);
-}
-.review-item:last-child { border-bottom: none; }
-.my-review { background: #fffdf0; border-radius: var(--radius-sm); padding: 14px; margin-bottom: 8px; border-bottom: none; }
-.review-header { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
-.review-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
-.review-author { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
-.my-badge {
-  display: inline-block; background: var(--primary); color: #fff;
-  font-size: 10px; font-weight: 700; border-radius: 4px;
-  padding: 1px 5px; margin-left: 6px; vertical-align: middle;
-}
+.user-name { font-size: 14px; font-weight: 600; }
+.review-date { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
 .review-stars { display: flex; gap: 2px; }
-.star-text { font-size: 14px; color: var(--border); }
-.star-text.filled { color: #FFCC00; }
-.review-service-badge {
-  margin-left: auto; font-size: 11px; color: var(--text-muted);
-  background: var(--bg); padding: 3px 8px; border-radius: var(--radius-full);
-  white-space: nowrap;
-}
-.review-actions { margin-left: auto; display: flex; gap: 4px; }
-.review-content { font-size: 14px; color: var(--text); line-height: 1.7; margin-bottom: 6px; }
-.review-date { font-size: 12px; color: var(--text-muted); }
-.edit-form-wrap { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
-.edit-actions { display: flex; gap: 6px; justify-content: flex-end; }
+.star-item { font-size: 13px; color: var(--border-strong); }
+.star-item.filled { color: var(--gold); }
+.review-content { font-size: 14px; color: var(--text-sub); line-height: 1.7; }
 
-.no-content { text-align: center; padding: 40px 0; color: var(--text-muted); font-size: 14px; }
+/* Hours */
+.hours-list { display: flex; flex-direction: column; gap: 6px; }
+.hour-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-radius: var(--radius-sm); font-size: 13px; }
+.hour-row.today { background: var(--bg-surface); font-weight: 600; }
+.hour-day { color: var(--text-sub); font-weight: 500; }
+.hour-off { color: var(--text-muted); }
+.hour-time { color: var(--text); font-weight: 600; }
+
+/* CTA */
+.cta-card { background: var(--primary); border-color: var(--primary); }
+.cta-label { font-size: 14px; color: rgba(255,255,255,0.7); margin-bottom: 12px; }
+.cta-card .btn-primary { background: #fff; color: var(--primary); }
+.cta-card .btn-primary:hover { background: #f3f4f6; }
 
 @media (max-width: 768px) {
-  .detail-layout { grid-template-columns: 1fr; }
+  .profile-layout { flex-direction: column; gap: 20px; }
+  .profile-img { width: 100px; height: 100px; }
+  .profile-name { font-size: 22px; }
+  .detail-grid { grid-template-columns: 1fr; }
+  .detail-sidebar { position: static; }
 }
 </style>

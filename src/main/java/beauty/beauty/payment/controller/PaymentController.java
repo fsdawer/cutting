@@ -51,4 +51,11 @@ public class PaymentController {
         paymentService.cancelPendingByOrderId(orderId);
         return ResponseEntity.ok().build();
     }
+
+    // GET /api/payments/by-order?orderId=  orderId로 단건 조회 (결제 성공 화면용)
+    @GetMapping("/by-order")
+    public ResponseEntity<PaymentResponse> getByOrderId(@LoginUserId Long userId,
+                                                        @RequestParam String orderId) {
+        return ResponseEntity.ok(paymentService.getByOrderId(userId, orderId));
+    }
 }

@@ -25,6 +25,8 @@ public class StylistProfileResponse {
     private String location;         // 미용실 주소 (프론트 호환 유지)
     private String salonPhone;
     private String salonDescription;
+    private Double latitude;
+    private Double longitude;
 
     private List<ServiceResponse> services;
     private List<WorkingHoursResponse> workingHours;
@@ -44,6 +46,8 @@ public class StylistProfileResponse {
                 .location(salon != null ? salon.getAddress() : null)
                 .salonPhone(salon != null ? salon.getPhone() : null)
                 .salonDescription(salon != null ? salon.getDescription() : null)
+                .latitude(salon != null && salon.getLocation() != null ? salon.getLocation().getY() : null)
+                .longitude(salon != null && salon.getLocation() != null ? salon.getLocation().getX() : null)
                 .build();
     }
 
@@ -64,6 +68,8 @@ public class StylistProfileResponse {
                 .location(salon != null ? salon.getAddress() : null)
                 .salonPhone(salon != null ? salon.getPhone() : null)
                 .salonDescription(salon != null ? salon.getDescription() : null)
+                .latitude(salon != null && salon.getLocation() != null ? salon.getLocation().getY() : null)
+                .longitude(salon != null && salon.getLocation() != null ? salon.getLocation().getX() : null)
                 .services(services)
                 .workingHours(workingHours)
                 .build();

@@ -1,51 +1,48 @@
 <template>
   <main class="page">
-    <div class="container state-center">
-      <div v-if="loading" class="loading-box">
-        <div class="spinner"></div>
-        <p class="state-text">결제를 확인하고 있습니다...</p>
-        <p class="state-hint">창을 닫지 마세요.</p>
-      </div>
-
-      <div v-else-if="error" class="result-box">
-        <div class="result-icon fail">✗</div>
-        <h2 class="result-title">결제 승인 실패</h2>
-        <p class="result-desc">{{ error }}</p>
-        <button class="btn btn-primary" @click="$router.push('/')">홈으로 이동</button>
-      </div>
-
-      <div v-else class="result-box">
-        <div class="result-icon success">✓</div>
-        <h2 class="result-title">결제가 완료되었습니다</h2>
-        <p class="result-desc">예약이 확정되었습니다.</p>
-
-        <div v-if="reservation" class="res-detail-card">
-          <div class="res-row">
-            <span class="res-label">미용사</span>
-            <span class="res-value">{{ reservation.stylistName }} · {{ reservation.salonName }}</span>
-          </div>
-          <div class="res-row">
-            <span class="res-label">서비스</span>
-            <span class="res-value">{{ reservation.serviceName }}</span>
-          </div>
-          <div class="res-row">
-            <span class="res-label">일시</span>
-            <span class="res-value">{{ formatDate(reservation.reservedAt) }}</span>
-          </div>
-          <div class="res-row">
-            <span class="res-label">결제 금액</span>
-            <span class="res-value price">{{ reservation.totalPrice?.toLocaleString() }}원</span>
-          </div>
-        </div>
-
-        <div class="chat-notice">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+    <div class="container">
+      <div class="success-wrap">
+        <div class="success-icon">
+          <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="24" cy="24" r="22" stroke="currentColor" stroke-width="2"/>
+            <path d="M14 24l7 7 13-14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
-          <span>채팅방이 생성되었습니다</span>
+        </div>
+        <h1 class="success-title">결제 완료</h1>
+        <p class="success-sub">예약이 확정되었습니다</p>
+
+        <div class="detail-card">
+          <div v-if="loading" class="state-center" style="padding:24px 0">
+            <div class="spinner"></div>
+          </div>
+          <template v-else>
+            <div class="detail-row">
+              <span class="detail-label">주문번호</span>
+              <span class="detail-val mono">{{ orderId }}</span>
+            </div>
+            <div v-if="payment" class="detail-row">
+              <span class="detail-label">결제 금액</span>
+              <span class="detail-val">{{ payment.amount?.toLocaleString() }}원</span>
+            </div>
+            <div v-if="payment" class="detail-row">
+              <span class="detail-label">결제 수단</span>
+              <span class="detail-val">{{ methodLabel(payment.method) }}</span>
+            </div>
+            <div v-if="reservation" class="detail-row">
+              <span class="detail-label">서비스</span>
+              <span class="detail-val">{{ reservation.serviceName }}</span>
+            </div>
+            <div v-if="reservation" class="detail-row">
+              <span class="detail-label">예약 일시</span>
+              <span class="detail-val">{{ formatDate(reservation.reservedAt) }}</span>
+            </div>
+          </template>
         </div>
 
-        <button class="btn btn-primary btn-lg btn-full-mob" @click="$router.push('/mypage')">확인</button>
+        <div class="success-actions">
+          <RouterLink to="/mypage" class="btn btn-primary">예약 내역 확인</RouterLink>
+          <RouterLink to="/" class="btn btn-ghost">홈으로</RouterLink>
+        </div>
       </div>
     </div>
   </main>
@@ -53,121 +50,102 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { paymentApi } from '@/api/payment'
 import { reservationApi } from '@/api/reservation'
 
-const route       = useRoute()
-const loading     = ref(true)
-const error       = ref('')
+const route  = useRoute()
+const router = useRouter()
+const loading    = ref(true)
+const payment    = ref(null)
 const reservation = ref(null)
+const orderId    = ref(route.query.orderId    || '')
+const paymentKey = ref(route.query.paymentKey || '')
+const amount     = ref(Number(route.query.amount) || 0)
 
+function methodLabel(m) {
+  return { TOSS: '토스페이', KAKAO_PAY: '카카오페이', NAVER_PAY: '네이버페이' }[m] || m
+}
 function formatDate(str) {
   if (!str) return ''
   const d = new Date(str)
-  return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')} · ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+  return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
 }
 
 onMounted(async () => {
-  const { paymentKey, orderId, amount } = route.query
-  if (!paymentKey || !orderId || !amount) {
-    error.value = '결제 정보가 유효하지 않습니다.'
-    loading.value = false
-    return
-  }
+  if (!orderId.value) { loading.value = false; return }
   try {
-    const payRes = await paymentApi.confirm({ paymentKey, orderId, amount: Number(amount) })
-    const reservationId = payRes.data?.reservationId
-    if (reservationId) {
-      const resRes = await reservationApi.getById(reservationId)
-      reservation.value = resRes.data
+    // Toss 리다이렉트: paymentKey와 amount가 있으면 백엔드 승인 처리
+    if (paymentKey.value && amount.value) {
+      try {
+        await paymentApi.confirm({
+          paymentKey: paymentKey.value,
+          orderId: orderId.value,
+          amount: amount.value,
+        })
+      } catch (e) {
+        const msg = e.response?.data?.message || ''
+        // "이미 결제 완료" = 새로고침 재시도 → 그냥 결제 내역 조회로 이어감
+        if (!msg.includes('이미 결제')) {
+          router.replace({
+            name: 'PaymentFail',
+            query: { orderId: orderId.value, message: msg || '결제 승인에 실패했습니다.' },
+          })
+          return
+        }
+      }
     }
-  } catch (e) {
-    error.value = e.response?.data?.message || '결제 승인 중 오류가 발생했습니다.'
-  } finally {
-    loading.value = false
-  }
+    const res = await paymentApi.getByOrderId(orderId.value)
+    payment.value = res.data
+    if (payment.value?.reservationId) {
+      const rRes = await reservationApi.getById(payment.value.reservationId)
+      reservation.value = rRes.data
+    }
+  } catch {}
+  finally { loading.value = false }
 })
 </script>
 
 <style scoped>
-.state-center {
-  text-align: center;
-  padding: 60px 0 80px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-}
-
-.loading-box {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-}
-.state-text { font-size: 16px; font-weight: 600; color: var(--text); }
-.state-hint { font-size: 13px; color: var(--text-muted); }
-
-.result-box {
+.success-wrap {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 48px 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 20px;
-  width: 100%;
-  max-width: 480px;
 }
 
-.result-icon {
+.success-icon {
   width: 72px; height: 72px;
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 32px; font-weight: 700;
+  color: var(--success);
+  animation: pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-.result-icon.success { background: var(--primary-light); color: var(--primary); }
-.result-icon.fail    { background: #FFF0EE; color: var(--red); }
+@keyframes pop {
+  from { transform: scale(0); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
 
-.result-title { font-size: 22px; font-weight: 700; margin: 0; }
-.result-desc  { font-size: 14px; color: var(--text-sub); margin: 0; }
+.success-title { font-size: 28px; font-weight: 800; letter-spacing: -0.03em; text-align: center; }
+.success-sub { font-size: 15px; color: var(--text-muted); text-align: center; margin-top: -8px; }
 
-/* Reservation detail card */
-.res-detail-card {
+.detail-card {
   width: 100%;
-  background: #fff;
+  background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 20px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  margin-top: 4px;
+  box-shadow: var(--shadow);
 }
-.res-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 14px;
+.detail-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 0; border-bottom: 1px solid var(--border);
 }
-.res-label { color: var(--text-sub); font-weight: 500; flex-shrink: 0; }
-.res-value { font-weight: 600; color: var(--text); text-align: right; }
-.res-value.price { color: var(--primary); font-size: 16px; }
+.detail-row:last-child { border-bottom: none; }
+.detail-label { font-size: 13px; color: var(--text-muted); font-weight: 500; }
+.detail-val { font-size: 14px; font-weight: 600; color: var(--text); }
+.detail-val.mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; color: var(--text-sub); }
 
-/* Chat notice badge */
-.chat-notice {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  background: var(--primary-light);
-  color: var(--primary);
-  font-size: 14px;
-  font-weight: 600;
-  padding: 10px 20px;
-  border-radius: var(--radius-full);
-}
-
-.btn-full-mob { width: 100%; }
-
-@media (max-width: 480px) {
-  .res-detail-card { padding: 16px 18px; }
-}
+.success-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 </style>

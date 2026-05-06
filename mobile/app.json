@@ -1,0 +1,22 @@
+{
+  "expo": {
+    "name": "CutIng",
+    "slug": "cuting",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "splash": { "resizeMode": "contain", "backgroundColor": "#ffffff" },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.cuting.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "주변 미용실 검색을 위해 위치 정보가 필요합니다."
+      }
+    },
+    "android": {
+      "package": "com.cuting.app",
+      "permissions": ["ACCESS_FINE_LOCATION"]
+    },
+    "plugins": ["expo-secure-store", "expo-location"]
+  }
+}

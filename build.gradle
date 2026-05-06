@@ -32,8 +32,9 @@ dependencies {
 	runtimeOnly    'io.jsonwebtoken:jjwt-impl:0.12.6'
 	runtimeOnly    'io.jsonwebtoken:jjwt-jackson:0.12.6'
 
-	// JPA + MySQL
+	// JPA + MySQL + Spatial
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'org.hibernate.orm:hibernate-spatial'
 	runtimeOnly    'com.mysql:mysql-connector-j'
 
 	// WebSocket (채팅)
@@ -50,6 +51,10 @@ dependencies {
 	compileOnly    'org.projectlombok:lombok'
 	annotationProcessor 'org.projectlombok:lombok'
 
+	// Monitoring (Actuator + Prometheus)
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	implementation 'io.micrometer:micrometer-registry-prometheus'
+
 	// .env 파일 자동 로드 (프로젝트 루트의 .env → Spring 환경변수로 주입)
 	implementation 'me.paulschwarz:spring-dotenv:4.0.0'
 
@@ -57,10 +62,26 @@ dependencies {
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.springframework.security:spring-security-test'
 	testImplementation 'com.h2database:h2'
+	testImplementation 'org.awaitility:awaitility:4.2.2'  // 비동기 테스트용
 	testRuntimeOnly    'org.junit.platform:junit-platform-launcher'
 }
 
 tasks.named('test') {
 	useJUnitPlatform()
+}
+
+// spring-dotenv가 Spring Boot 4.x에서 동작하지 않아 Gradle에서 직접 .env 로드
+bootRun {
+	if (file('.env').exists()) {
+		file('.env').readLines().each { line ->
+			def trimmed = line.trim()
+			if (trimmed && !trimmed.startsWith('#') && trimmed.contains('=')) {
+				def idx = trimmed.indexOf('=')
+				def key = trimmed.substring(0, idx).trim()
+				def val = trimmed.substring(idx + 1).trim()
+				if (key) { environment key, val }
+			}
+		}
+	}
 }
 

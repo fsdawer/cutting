@@ -1,3 +1,5 @@
+
+
 # CutIng 프로젝트 (beauty)
 
 ## 기술 스택
@@ -75,6 +77,14 @@ beauty/
 │   │   │   │   │   ├── TokenBlacklistService.java    # Redis SET TTL로 access token 무효화
 │   │   │   │   │   └── RedisMessageSubscriber.java   # chat:room:* 구독 → STOMP 브로드캐스트
 │   │   │   │   └── resolver/LoginUserIdResolver.java
+│   │   │   ├── favorite/
+│   │   │   │   ├── controller/FavoriteController.java  # POST /api/favorites/stylists/{id}
+│   │   │   │   ├── service/FavoriteService.java
+│   │   │   │   ├── entity/FavoriteStylist.java
+│   │   │   │   └── repository/FavoriteStylistRepository.java
+│   │   │   ├── notification/
+│   │   │   │   ├── service/NotificationService.java    # WebSocket 알림 발송 (@Async)
+│   │   │   │   └── dto/NotificationMessage.java
 │   │   │   ├── payment/
 │   │   │   │   ├── controller/PaymentController.java
 │   │   │   │   ├── service/
@@ -89,15 +99,30 @@ beauty/
 │   │   │   │       ├── PaymentConfirmRequest.java
 │   │   │   │       ├── PaymentResponse.java
 │   │   │   │       └── RefundRequest.java
+│   │   │   ├── ranking/
+│   │   │   │   ├── controller/RankingController.java
+│   │   │   │   ├── service/
+│   │   │   │   │   ├── RankingService.java
+│   │   │   │   │   └── RankingServiceImpl.java       # Redis ZSET 베이지안 랭킹
+│   │   │   │   └── dto/RankingResponse.java
 │   │   │   ├── reservation/
-│   │   │   │   ├── controller/ReservationController.java
+│   │   │   │   ├── controller/
+│   │   │   │   │   ├── ReservationController.java
+│   │   │   │   │   └── WaitingController.java        # POST /api/waiting/stylists/{id}
 │   │   │   │   ├── service/
 │   │   │   │   │   ├── ReservationService.java
-│   │   │   │   │   └── ReservationServiceImpl.java   # getStylistBookedTimes @Cacheable(booked_times 30분)
+│   │   │   │   │   ├── ReservationServiceImpl.java   # Redis 분산락 + booked_times @Cacheable
+│   │   │   │   │   └── WaitingService.java
 │   │   │   │   ├── entity/
 │   │   │   │   │   ├── Reservation.java              # status/createdAt에 @Builder.Default 적용
-│   │   │   │   │   └── ReservationImage.java
-│   │   │   │   ├── repository/ReservationRepository.java
+│   │   │   │   │   ├── ReservationImage.java
+│   │   │   │   │   └── Waiting.java                  # 빈자리 대기 엔티티
+│   │   │   │   ├── event/
+│   │   │   │   │   ├── ReservationStreamListener.java  # reservation-events 스트림 소비
+│   │   │   │   │   └── CancelStreamListener.java       # cancel_stream 소비 → 빈자리 알림
+│   │   │   │   ├── repository/
+│   │   │   │   │   ├── ReservationRepository.java
+│   │   │   │   │   └── WaitingRepository.java
 │   │   │   │   └── dto/
 │   │   │   │       ├── ReservationRequest.java
 │   │   │   │       └── ReservationResponse.java
@@ -113,7 +138,7 @@ beauty/
 │   │   │   │   │   └── StylistServiceImpl.java
 │   │   │   │   ├── entity/
 │   │   │   │   │   ├── StylistProfile.java
-│   │   │   │   │   ├── StylistServiceItem.java
+│   │   │   │   │   ├── StylistServiceItem.java       # duration 필드 (durationMinutes 아님)
 │   │   │   │   │   └── OperatingHours.java
 │   │   │   │   ├── repository/
 │   │   │   │   │   ├── StylistProfileRepository.java
@@ -143,41 +168,45 @@ beauty/
 │   └── test/
 │       └── java/beauty/beauty/
 │           ├── BeautyApplicationTests.java
-│           └── stylist/service/StylistServiceImplIntegrationTest.java
+│           └── reservation/
 │
 └── frontend/
     ├── package.json
     ├── vite.config.js
-    ├── index.html
+    ├── index.html                # Kakao Maps SDK: autoload=false
     └── src/
         ├── main.js
-        ├── App.vue
+        ├── App.vue               # 로그인 감지 → notificationStore connect/disconnect
         ├── style.css
-        ├── assets/main.css
+        ├── assets/main.css       # 디자인 토큰 (--primary, --accent, --success 등)
         ├── api/
         │   ├── index.js          # axios 인스턴스 + 공통 인터셉터 (토큰 자동 주입, 401 refresh)
         │   ├── auth.js
         │   ├── user.js
         │   ├── stylist.js
-        │   ├── reservation.js
-        │   └── payment.js
+        │   ├── reservation.js    # reservationApi + waitingApi export
+        │   ├── payment.js        # prepare(data) — 객체 그대로 전달
+        │   └── ranking.js
         ├── stores/
-        │   └── authStore.js      # Pinia - JWT 토큰/유저 상태 관리
+        │   ├── authStore.js      # Pinia - JWT 토큰/유저 상태 관리
+        │   └── notificationStore.js  # STOMP WebSocket 알림 상태
         ├── router/
         │   └── index.js          # Vue Router (navigation guard 포함)
         ├── components/
-        │   ├── Navbar.vue
-        │   └── StylistCard.vue
+        │   ├── Navbar.vue        # 알림 벨 아이콘 + 드롭다운
+        │   ├── StylistCard.vue
+        │   └── ChatWidget.vue
         └── views/
-            ├── HomeView.vue
+            ├── HomeView.vue      # 카카오 지도 (kakao.maps.load 콜백 패턴)
             ├── LoginView.vue
             ├── RegisterView.vue
             ├── OAuth2CallbackView.vue
             ├── MyPageView.vue
+            ├── RankingView.vue
             ├── StylistDetailView.vue
             ├── StylistManageView.vue
             ├── StylistReservationsView.vue
-            ├── BookingView.vue
+            ├── BookingView.vue   # 마감 슬롯 클릭 → 빈자리 알림 모달
             ├── PaymentView.vue
             ├── PaymentSuccessView.vue
             ├── PaymentFailView.vue
@@ -216,6 +245,10 @@ k6 run -e TOKEN="Bearer eyJ..." -e STYLIST_ID=1 -e SERVICE_ID=1 k6/test_distribu
 | 채팅방 목록 캐시 | `chat_rooms::{userId}` | 1분 | `ChatServiceImpl` |
 | 채팅 Pub/Sub | `chat:room:{roomId}` | - | `ChatServiceImpl` → `RedisMessageSubscriber` |
 | 로그인 rate limit | `rate:login:{ip}` | 1분 | `RateLimitFilter` |
+| 랭킹 ZSET | `ranking:{district}` | 상시 | `RankingServiceImpl` |
+| 예약 분산락 | `lock:reservation:{stylistId}:{datetime}` | 5초 | `ReservationServiceImpl` |
+| 예약 이벤트 Stream | `reservation-events` | - | `ReservationStreamListener` |
+| 빈자리 알림 Stream | `cancel_stream` | - | `CancelStreamListener` |
 
 ## 도메인 요약
 
@@ -225,11 +258,31 @@ k6 run -e TOKEN="Bearer eyJ..." -e STYLIST_ID=1 -e SERVICE_ID=1 k6/test_distribu
 - 플로우: `prepare(PENDING 생성)` → 프론트 토스 위젯 → `confirm(PAID)` → 필요시 `refund(REFUNDED)`
 - PENDING 상태 10분 후 `PaymentCleanupScheduler`가 자동 삭제
 - `HttpClient`는 `PaymentServiceImpl`의 인스턴스 변수로 관리 (재사용)
+- **프론트 API**: `paymentApi.prepare(data)` — data 객체를 그대로 전달 (이중 래핑 금지)
 
 ### 예약 (reservation)
 - `Reservation`은 `User`, `StylistServiceItem` 참조
 - `totalPrice` 필드가 결제 금액 기준
 - 예약 확정 시 채팅방 자동 생성 (`ChatServiceImpl.createRoomForReservation`)
+- Redis 분산락으로 동시 예약 방지
+- 예약 생성 → `reservation-events` Stream 발행 → 랭킹 재계산 + WebSocket 알림
+
+### 빈자리 알림 (waiting)
+- 마감 슬롯 클릭 → `POST /api/waiting/stylists/{id}?date=&time=`
+- `Waiting` 엔티티에 저장
+- 예약 취소 → `cancel_stream` 발행 → `CancelStreamListener` → `NotificationService.notifyWaitingAvailable()`
+- WebSocket `/topic/notification/{userId}`로 실시간 알림 전송
+
+### 알림 (notification)
+- `NotificationService`: WebSocket `SimpMessagingTemplate`으로 발송 (`@Async`)
+- 타입: `RESERVATION_CREATED`, `WAITING_AVAILABLE`
+- 프론트: `notificationStore` (Pinia) — STOMP 구독, 읽음 상태 관리
+- Navbar 벨 아이콘에 미읽음 배지 표시
+
+### 랭킹 (ranking)
+- `GET /api/ranking?district=` — Redis ZSET에서 O(log N) 조회
+- 예약 생성 시 `RankingService.recalculateScore(Long stylistProfileId)` 비동기 호출
+- 베이지안 알고리즘: reviewCount + avgRating + recentBookings(30일)
 
 ### 인증
 - 컨트롤러에서 `@LoginUserId Long userId`로 현재 로그인 유저 ID 주입
@@ -250,12 +303,16 @@ k6 run -e TOKEN="Bearer eyJ..." -e STYLIST_ID=1 -e SERVICE_ID=1 k6/test_distribu
 - `/api/payments/**`
 - `/api/reviews/**`
 - `/api/chat/**`
+- `/api/ranking/**`
+- `/api/waiting/**`
+- `/api/favorites/**`
 
 ## 환경변수 (.env) — 커밋 금지
 - `toss.secret-key` → 토스페이먼츠 시크릿 키
 - `REDIS_HOST`, `REDIS_PORT` → Redis 연결 (기본값: localhost:6379)
 - DB, JWT, OAuth2, SMTP 설정 포함
 - `spring-dotenv` 라이브러리로 `.env` → Spring 환경변수 자동 주입
+- `KAKAO_REST_API_KEY=4b99eef97fd6cc9b8f07529eb48a3732`
 
 ## 주의사항 / 알려진 패턴
 - `@LoginUserId`는 커스텀 애노테이션 + `HandlerMethodArgumentResolver`로 동작
@@ -268,3 +325,8 @@ k6 run -e TOKEN="Bearer eyJ..." -e STYLIST_ID=1 -e SERVICE_ID=1 k6/test_distribu
   - `ObjectMapper` → `tools.jackson.databind.ObjectMapper`
   - `GenericJackson2JsonRedisSerializer` → `GenericJacksonJsonRedisSerializer`
   - `@Jacksonized` 사용 불가 → `@JsonDeserialize(builder=...)` + `@JsonPOJOBuilder` 직접 사용
+  - **DTO `@Setter` 필수**: `@NoArgsConstructor`만 있으면 Jackson이 필드 세팅 불가 → `@Setter` 추가
+- **Kakao Maps**: `autoload=false` + `window.kakao.maps.load(callback)` 패턴 사용
+- **Redis Stream `this` 주의**: `@PostConstruct`에서 `listenerContainer.receive(..., this)`로 등록 시 raw bean 전달 → `@Transactional` 미적용 → Lazy proxy 초기화 불가. Listener 내부에서 ID만 추출해 서비스에 전달할 것
+- **`StylistServiceItem.duration`**: 필드명은 `duration` (프론트의 `durationMinutes`와 다름). `ReservationResponse`에 `serviceDuration`으로 매핑
+- **Vue `v-if` + DOM 초기화**: `isNearbyMode = true` 후 `await nextTick()` 필수, 그 후 `kakao.maps.load()` 호출

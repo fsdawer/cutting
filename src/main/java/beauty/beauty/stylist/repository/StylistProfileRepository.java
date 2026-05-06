@@ -2,6 +2,7 @@ package beauty.beauty.stylist.repository;
 
 import beauty.beauty.stylist.entity.StylistProfile;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -26,4 +27,42 @@ public interface StylistProfileRepository extends JpaRepository<StylistProfile, 
             "(:keyword IS NULL OR sal.name LIKE %:keyword% OR u.name LIKE %:keyword%) AND " +
             "(:location IS NULL OR sal.address LIKE %:location%)")
     List<StylistProfile> searchStylists(@Param("keyword") String keyword, @Param("location") String location);
+
+    // 랭킹 조회용: 특정 구의 미용사 전체 조회 (Before: N+1 기반 랭킹 계산에 사용)
+    @Query("SELECT DISTINCT sp FROM StylistProfile sp " +
+           "JOIN FETCH sp.user u " +
+           "LEFT JOIN FETCH sp.salon s " +
+           "WHERE s.district = :district")
+    List<StylistProfile> findByDistrict(@Param("district") String district);
+
+    // 위치 기반 반경 검색: 거리 오름차순으로 ID 반환 (radius 단위: 미터)
+    @Query(value = """
+            SELECT sp.id FROM stylist_profiles sp
+            JOIN salons s ON sp.salon_id = s.id
+            WHERE s.location IS NOT NULL
+            AND ST_Distance_Sphere(s.location,
+                ST_GeomFromText(CONCAT('POINT(', :lng, ' ', :lat, ')'), 4326)) <= :radius
+            ORDER BY ST_Distance_Sphere(s.location,
+                ST_GeomFromText(CONCAT('POINT(', :lng, ' ', :lat, ')'), 4326))
+            LIMIT 20
+            """, nativeQuery = true)
+    List<Long> findNearbyIds(@Param("lat") double lat,
+                             @Param("lng") double lng,
+                             @Param("radius") int radius);
+
+    @Query("SELECT DISTINCT sp FROM StylistProfile sp " +
+           "JOIN FETCH sp.user u " +
+           "LEFT JOIN FETCH sp.salon s " +
+           "WHERE sp.id IN :ids")
+    List<StylistProfile> findByIdIn(@Param("ids") List<Long> ids);
+
+    // 찜하기 (Row Lock 기반 동시성 방어)
+    @Modifying(clearAutomatically = true)
+    @Query("UPDATE StylistProfile s SET s.favoriteCount = s.favoriteCount + 1 WHERE s.id = :id")
+    void incrementFavoriteCount(@Param("id") Long id);
+
+    // 찜 취소
+    @Modifying(clearAutomatically = true)
+    @Query("UPDATE StylistProfile s SET s.favoriteCount = s.favoriteCount - 1 WHERE s.id = :id AND s.favoriteCount > 0")
+    void decrementFavoriteCount(@Param("id") Long id);
 }

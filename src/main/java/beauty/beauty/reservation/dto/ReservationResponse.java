@@ -24,6 +24,7 @@ public class ReservationResponse {
     private String location;
     private String stylistProfileImg;
     private String serviceName;
+    private int serviceDuration;
     private LocalDateTime reservedAt;
     private String status;
     private int totalPrice;
@@ -52,6 +53,7 @@ public class ReservationResponse {
                 .location(reservation.getStylistProfile().getSalon() != null ? reservation.getStylistProfile().getSalon().getAddress() : null)
                 .stylistProfileImg(reservation.getStylistProfile().getUser().getProfileImg())
                 .serviceName(reservation.getService().getName())
+                .serviceDuration(reservation.getService().getDuration())
                 .reservedAt(reservation.getReservedAt())
                 .status(reservation.getStatus().name())
                 .totalPrice(reservation.getTotalPrice())

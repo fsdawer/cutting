@@ -18,17 +18,22 @@ import beauty.beauty.stylist.repository.StylistServiceRepository;
 import beauty.beauty.user.entity.User;
 import beauty.beauty.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Map;
-import java.util.stream.Collectors;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -37,8 +42,12 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ReservationServiceImpl implements ReservationService {
@@ -51,71 +60,117 @@ public class ReservationServiceImpl implements ReservationService {
     private final OperatingHoursRepository operatingHoursRepository;
     private final ChatServiceImpl chatService;
     private final ChatRoomRepository chatRoomRepository;
+    // [AFTER] 이벤트 기반 비동기 처리
+    private final StringRedisTemplate stringRedisTemplate;
+    private final RedisTemplate<String, Object> redisTemplate;
+    private final TransactionTemplate transactionTemplate;
 
     private static final String UPLOAD_DIR = "uploads/reservation-images/";
 
-    // 1. 예약 생성
-    // @CacheEvict: 예약을 새로 만들면 "이 미용사 이 날짜에 예약된 시간 목록" 캐시가 틀린 데이터가 됨
-    // → 해당 캐시 키(stylistId:날짜)를 즉시 삭제해서 다음 조회 때 DB에서 다시 읽게 함
-    // 예) stylistId=1, 날짜=2026-05-10 → Redis 키 "booked_times::1:2026-05-10" 삭제
+    // ─────────────────────────────────────────────────────────────────────────
+    // 1. 예약 생성  [AFTER — Redis SETNX 분산락 + 비동기 이벤트]
+    // ─────────────────────────────────────────────────────────────────────────
     @Override
-    @Transactional
     @CacheEvict(value = "booked_times",
                 key = "#request.stylistId + ':' + #request.reservedAt.toLocalDate().toString()")
     public ReservationResponse createReservation(Long userId, ReservationRequest request) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
 
-        StylistProfile stylist = stylistProfileRepository.findById(request.getStylistId())
-                .orElseThrow(() -> new IllegalArgumentException("미용사를 찾을 수 없습니다."));
-
-        StylistServiceItem stylistServiceItem = serviceRepository.findById(request.getServiceId())
-                .orElseThrow(() -> new IllegalArgumentException("해당 서비스를 찾을 수 없습니다."));
-
-        if (!stylistServiceItem.getStylistProfile().getId().equals(stylist.getId())) {
-            throw new IllegalArgumentException("해당 미용사가 제공하는 서비스가 아닙니다.");
-        }
-
-        LocalDateTime reservedAt = request.getReservedAt();
-        int dayOfWeekValue = reservedAt.getDayOfWeek().getValue() - 1;
-        LocalTime requestedTime = reservedAt.toLocalTime();
-
-        OperatingHours hours = operatingHoursRepository.findByStylistProfileIdAndDayOfWeek(stylist.getId(), dayOfWeekValue)
-                .orElseThrow(() -> new IllegalArgumentException("해당 요일의 영업시간 정보가 설정되지 않았습니다."));
-
-        if (hours.isClosed()) {
-            throw new IllegalArgumentException("해당 예약일은 휴무일입니다.");
-        }
-
-        if (requestedTime.isBefore(hours.getOpenTime()) || requestedTime.isAfter(hours.getCloseTime())) {
-            throw new IllegalStateException("영업시간 외에는 예약할 수 없습니다. (영업시간: "
-                    + hours.getOpenTime() + " ~ " + hours.getCloseTime() + ")");
-        }
-
-        boolean isBooked = reservationRepository.existsByStylistProfileIdAndReservedAtAndStatusIn(
-                stylist.getId(),
-                request.getReservedAt(),
-                List.of(Reservation.Status.PENDING, Reservation.Status.CONFIRMED)
-        );
-
-        if (isBooked) {
+        // [Flow 1] 예약 동시성 제어를 위한 Redis 분산락 획득 (Fail-Fast)
+        // DB 커넥션을 점유하지 않은 상태(@Transactional 밖)에서 Redis 서버와 먼저 통신하여
+        // 락을 획득하지 못하면 즉시 예외를 던지고 종료시킵니다. (커넥션 고갈 방지)
+        String lockKey = "lock:reservation:" + request.getStylistId() + ":" + request.getReservedAt();
+        Boolean acquired = redisTemplate.opsForValue().setIfAbsent(lockKey, "1", 5, TimeUnit.SECONDS);
+        if (!Boolean.TRUE.equals(acquired)) {
             throw new IllegalStateException("해당 시간에는 이미 예약이 차있습니다. 다른 시간을 선택해주세요.");
         }
 
-        Reservation reservation = Reservation.builder()
-                .user(user)
-                .stylistProfile(stylist)
-                .service(stylistServiceItem)
-                .reservedAt(request.getReservedAt())
-                .status(Reservation.Status.CONFIRMED)
-                .requestMemo(request.getRequestMemo())
-                .totalPrice(stylistServiceItem.getPrice())
-                .createdAt(LocalDateTime.now())
-                .build();
+        try {
+            // [Flow 2] 트랜잭션 바운더리 진입 (TransactionTemplate 적용)
+            // 락을 무사히 획득한 스레드만 트랜잭션을 시작하며,
+            // 최대한 짧은 시간 동안만 DB 커넥션을 꺼내 쓰고 즉시 반납합니다.
+            return transactionTemplate.execute(status -> {
+                User user = userRepository.findById(userId)
+                        .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
 
-        Reservation saved = reservationRepository.save(reservation);
-        ChatRoom chatRoom = chatService.createRoomForReservation(saved);
-        return ReservationResponse.from(saved, chatRoom.getId());
+                StylistProfile stylist = stylistProfileRepository.findById(request.getStylistId())
+                        .orElseThrow(() -> new IllegalArgumentException("미용사를 찾을 수 없습니다."));
+
+                StylistServiceItem stylistServiceItem = serviceRepository.findById(request.getServiceId())
+                        .orElseThrow(() -> new IllegalArgumentException("해당 서비스를 찾을 수 없습니다."));
+
+                if (!stylistServiceItem.getStylistProfile().getId().equals(stylist.getId())) {
+                    throw new IllegalArgumentException("해당 미용사가 제공하는 서비스가 아닙니다.");
+                }
+
+                LocalDateTime reservedAt = request.getReservedAt();
+                int dayOfWeekValue = reservedAt.getDayOfWeek().getValue() - 1;
+                LocalTime requestedTime = reservedAt.toLocalTime();
+
+                OperatingHours hours = operatingHoursRepository
+                        .findByStylistProfileIdAndDayOfWeek(stylist.getId(), dayOfWeekValue)
+                        .orElseThrow(() -> new IllegalArgumentException("해당 요일의 영업시간 정보가 설정되지 않았습니다."));
+
+                if (hours.isClosed()) {
+                    throw new IllegalArgumentException("해당 예약일은 휴무일입니다.");
+                }
+
+                if (requestedTime.isBefore(hours.getOpenTime()) || requestedTime.isAfter(hours.getCloseTime())) {
+                    throw new IllegalStateException("영업시간 외에는 예약할 수 없습니다. (영업시간: "
+                            + hours.getOpenTime() + " ~ " + hours.getCloseTime() + ")");
+                }
+
+                boolean isBooked = reservationRepository.existsByStylistProfileIdAndReservedAtAndStatusIn(
+                        stylist.getId(),
+                        request.getReservedAt(),
+                        List.of(Reservation.Status.PENDING, Reservation.Status.CONFIRMED)
+                );
+
+                if (isBooked) {
+                    throw new IllegalStateException("해당 시간에는 이미 예약이 차있습니다. 다른 시간을 선택해주세요.");
+                }
+
+                Reservation reservation = Reservation.builder()
+                        .user(user)
+                        .stylistProfile(stylist)
+                        .service(stylistServiceItem)
+                        .reservedAt(request.getReservedAt())
+                        .status(Reservation.Status.CONFIRMED)
+                        .requestMemo(request.getRequestMemo())
+                        .totalPrice(stylistServiceItem.getPrice())
+                        .createdAt(LocalDateTime.now())
+                        .build();
+
+                // [Flow 3] 예약 정보 DB 저장
+                // 여기서 DB INSERT 쿼리가 발생합니다.
+                Reservation saved = reservationRepository.save(reservation);
+                ChatRoom chatRoom = chatService.createRoomForReservation(saved);
+
+                // [Flow 4] 이벤트 발행 (Redis Streams Publish)
+                // DB 커밋 완료 후 Stream 발행 — 롤백 시 메시지가 남는 문제를 방지하기 위해 
+                // TransactionSynchronizationManager.afterCommit() 시점에 발송합니다.
+                long savedId = saved.getId();
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        // 통신 오버헤드를 막기 위해 무거운 객체(Reservation) 대신 reservationId 단일 값만 던집니다.
+                        stringRedisTemplate.opsForStream().add(
+                                "reservation-events",
+                                Map.of("reservationId", String.valueOf(savedId))
+                        );
+                        log.info("[Reservation] Stream 발행 완료 — reservationId={}", savedId);
+                    }
+                });
+
+                log.info("[Reservation] 예약 생성 완료 — reservationId={}, stylistId={}, userId={}",
+                        saved.getId(), stylist.getId(), userId);
+
+                return ReservationResponse.from(saved, chatRoom.getId());
+            });
+        } finally {
+            // [Flow 5] Redis 락 해제
+            // DB 트랜잭션이 성공이든 예외든 완전히 끝난 직후 락을 반납하여 다른 스레드가 진입할 수 있게 합니다.
+            redisTemplate.delete(lockKey);
+        }
     }
 
     // 2. 예약 이미지 업로드
@@ -214,6 +269,26 @@ public class ReservationServiceImpl implements ReservationService {
 
         reservation.setStatus(Reservation.Status.CANCELLED);
         reservationRepository.save(reservation);
+
+        // 빈자리 알림 이벤트 발행 (Redis Streams)
+        long stylistId = reservation.getStylistProfile().getId();
+        LocalDate cancelDate = reservation.getReservedAt().toLocalDate();
+        LocalTime cancelTime = reservation.getReservedAt().toLocalTime();
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                stringRedisTemplate.opsForStream().add(
+                        "cancel_stream",
+                        Map.of(
+                                "stylistId", String.valueOf(stylistId),
+                                "date", cancelDate.toString(),
+                                "time", cancelTime.toString()
+                        )
+                );
+                log.info("[Waiting] 예약 취소 발생, 빈자리 알림 이벤트 발행 — stylistId={}, datetime={}", stylistId, reservation.getReservedAt());
+            }
+        });
     }
 
 
@@ -231,6 +306,7 @@ public class ReservationServiceImpl implements ReservationService {
                 .map(r -> ReservationResponse.from(r, chatRoomIdMap.get(r.getId())))
                 .toList();
     }
+
 
     // 7. 예약 상태 변경 (미용사용)
     @Override

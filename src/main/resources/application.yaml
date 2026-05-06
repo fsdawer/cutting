@@ -93,3 +93,28 @@ jwt:
 # ── 서버 포트 ─────────────────────────────────────────
 server:
   port: 8080
+
+# ── 카카오 API ────────────────────────────────────────
+kakao:
+  rest-api-key: ${KAKAO_REST_API_KEY}
+
+# ── Rate Limit ────────────────────────────────────────
+# k6 부하테스트 시 setup()에서 N번 로그인이 필요하므로 충분히 높게 설정
+# 운영 배포 시 10으로 낮출 것
+rate-limit:
+  login:
+    max-requests: 200
+
+# ── 모니터링 (Actuator + Prometheus) ───────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus
+  endpoint:
+    health:
+      show-details: always
+  prometheus:
+    metrics:
+      export:
+        enabled: true

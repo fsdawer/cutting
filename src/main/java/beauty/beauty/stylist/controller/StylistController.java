@@ -30,6 +30,15 @@ public class StylistController {
         return ResponseEntity.ok(stylistService.getStylists(keyword, location));
     }
 
+    // GET  /api/stylists/nearby          위치 기반 주변 미용사 조회
+    @GetMapping("/nearby")
+    public ResponseEntity<List<StylistProfileResponse>> getNearbyStylists(
+            @RequestParam double lat,
+            @RequestParam double lng,
+            @RequestParam(defaultValue = "3000") int radius) {
+        return ResponseEntity.ok(stylistService.getNearbyStylists(lat, lng, radius));
+    }
+
     // GET  /api/stylists/{stylistId}    상세 조회
     @GetMapping("/{stylistId}")
     public ResponseEntity<StylistProfileResponse> getStylist(@PathVariable Long stylistId) {

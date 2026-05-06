@@ -22,7 +22,7 @@ public class StylistServiceItem {
     private String name;
 
     @Column(length = 50)
-    private String category;  // 예: 커트, 펌, 염색, 케어, 기타
+    private String category;  // 커트 | 일반펌 | 열펌 | 염색 | 클리닉 | 기타
 
     @Column(nullable = false)
     private int price;

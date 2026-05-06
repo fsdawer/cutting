@@ -1,88 +1,74 @@
 <template>
   <main class="page">
     <div class="container">
+      <button class="back-link" @click="$router.back()">← 뒤로가기</button>
+
       <div v-if="loading" class="state-center">
         <div class="spinner"></div>
         <p class="state-text">결제 정보를 불러오는 중...</p>
       </div>
 
       <div v-else class="pay-layout">
-        <!-- 좌측: 예약 정보 + 결제 수단 -->
         <div class="pay-main">
-          <div class="page-header">
-            <button class="back-btn" @click="$router.back()">← 뒤로가기</button>
-            <h1 class="section-title">결제</h1>
-          </div>
+          <h1 class="pay-title">결제</h1>
 
-          <!-- 예약 정보 -->
+          <!-- 예약 요약 -->
           <div class="card info-card">
-            <h2 class="card-title">예약 내역</h2>
-            <div class="res-info">
-              <img
-                :src="reservation.stylistProfileImg || `https://i.pravatar.cc/80?u=${reservation.stylistId}`"
-                class="res-avatar"
-              />
+            <h2 class="card-section-title">예약 내역</h2>
+            <div class="res-summary">
+              <img :src="`https://i.pravatar.cc/64?u=${reservation.stylistId}`" class="res-avatar" />
               <div class="res-detail">
-                <p class="res-name">{{ reservation.stylistName }} · {{ reservation.salonName }}</p>
-                <p class="res-meta">📅 {{ formatDate(reservation.reservedAt) }}</p>
-                <p class="res-meta">💇 {{ reservation.serviceName }}</p>
+                <p class="res-stylist">{{ reservation.stylistName }}</p>
+                <p class="res-salon">{{ reservation.salonName }}</p>
+                <div class="res-meta-row">
+                  <span class="res-meta-item">{{ formatDate(reservation.reservedAt) }}</span>
+                  <span class="meta-dot">·</span>
+                  <span class="res-meta-item">{{ reservation.serviceName }}</span>
+                </div>
               </div>
             </div>
           </div>
 
-          <!-- 결제 수단 -->
-          <div class="card method-card">
-            <h2 class="card-title">결제 수단</h2>
-            <div class="method-grid">
-              <button
-                v-for="m in payMethods"
-                :key="m.value"
-                class="method-btn"
-                :class="{ selected: payMethod === m.value }"
-                @click="payMethod = m.value"
-              >
-                <span class="method-icon">{{ m.icon }}</span>
-                <span>{{ m.label }}</span>
-              </button>
-            </div>
+          <!-- 토스 결제 위젯 -->
+          <div class="card widget-card">
+            <div id="payment-widget"></div>
           </div>
+          <div id="payment-agreement"></div>
+
+          <p v-if="widgetError" class="err-msg">{{ widgetError }}</p>
         </div>
 
-        <!-- 우측: 결제 요약 -->
+        <!-- 결제 요약 사이드바 -->
         <aside class="pay-sidebar">
           <div class="card summary-card">
-            <h2 class="card-title">결제 요약</h2>
+            <h2 class="card-section-title">결제 요약</h2>
             <div class="summary-rows">
-              <div class="sr-row">
+              <div class="summary-row">
                 <span>서비스</span>
                 <span>{{ reservation.serviceName }}</span>
               </div>
-              <div class="sr-row">
-                <span>기본 요금</span>
-                <span>{{ reservation.totalPrice?.toLocaleString() }}원</span>
+              <div class="summary-row">
+                <span>소요 시간</span>
+                <span>{{ reservation.serviceDuration }}분</span>
               </div>
-              <div class="sr-row total">
-                <span>최종 결제액</span>
+              <div class="summary-divider"></div>
+              <div class="summary-row total">
+                <span>총 결제 금액</span>
                 <span class="total-price">{{ reservation.totalPrice?.toLocaleString() }}원</span>
               </div>
             </div>
 
-            <p v-if="payError" class="msg-error">{{ payError }}</p>
+            <p v-if="payError" class="err-msg">{{ payError }}</p>
 
             <button
-              class="btn btn-primary btn-full btn-lg"
-              @click="handlePayment"
-              :disabled="paying"
-              style="margin-top: 16px;"
+              class="btn btn-primary btn-full pay-btn"
+              :disabled="paying || !widgetReady"
+              @click="handlePay"
             >
-              <span v-if="paying" class="spinner" style="width:18px;height:18px;border-width:2px;"></span>
+              <span v-if="paying" class="spinner" style="width:16px;height:16px;border-width:2px"></span>
               <span v-else>{{ reservation.totalPrice?.toLocaleString() }}원 결제하기</span>
             </button>
-
-            <div class="secure-badge">
-              <span>🔒</span>
-              <span>토스페이먼츠 보안 결제</span>
-            </div>
+            <p class="pay-note">결제 후 예약이 확정됩니다</p>
           </div>
         </aside>
       </div>
@@ -91,164 +77,133 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { reservationApi } from '@/api/reservation'
 import { paymentApi } from '@/api/payment'
-import { useAuthStore } from '@/stores/authStore'
 
-const route         = useRoute()
-const router        = useRouter()
-const authStore     = useAuthStore()
-const reservationId = route.params.reservationId
+const route  = useRoute()
+const router = useRouter()
 
-const loading   = ref(true)
 const reservation = ref({})
-const paying    = ref(false)
-const payError  = ref('')
-const orderId   = ref('')
+const loading     = ref(true)
+const paying      = ref(false)
+const payError    = ref('')
+const widgetError = ref('')
+const widgetReady = ref(false)
 
-const payMethod  = ref('카드')
-const payMethods = [
-  { value: '카드',    label: '신용/체크카드', icon: '💳' },
-  { value: '토스페이', label: '토스페이',     icon: '💸' },
-  { value: '계좌이체', label: '계좌이체',     icon: '🏦' },
-]
+let paymentWidget = null
 
 function formatDate(str) {
   if (!str) return ''
   const d = new Date(str)
-  return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')} · ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+  return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
 }
 
-function loadTossScript() {
-  return new Promise((resolve) => {
-    if (window.TossPayments) { resolve(true); return }
-    const script = document.createElement('script')
-    script.src = 'https://js.tosspayments.com/v1/payment'
-    script.onload  = () => resolve(true)
-    script.onerror = () => resolve(false)
-    document.head.appendChild(script)
-  })
+async function initWidget() {
+  if (!window.PaymentWidget) {
+    widgetError.value = '토스페이먼츠 SDK를 불러올 수 없습니다.'
+    return
+  }
+  try {
+    paymentWidget = window.PaymentWidget(import.meta.env.VITE_TOSS_CLIENT_KEY, window.PaymentWidget.ANONYMOUS)
+    await paymentWidget.renderPaymentMethods('#payment-widget', { value: reservation.value.totalPrice })
+    try {
+      await paymentWidget.renderAgreement('#payment-agreement')
+    } catch { /* 약관 위젯 미지원 시 무시 */ }
+    widgetReady.value = true
+  } catch (e) {
+    widgetError.value = '결제 위젯 초기화에 실패했습니다.'
+    console.error('[Toss Widget]', e)
+  }
+}
+
+async function handlePay() {
+  if (!paymentWidget) return
+  paying.value = true
+  payError.value = ''
+  try {
+    const prepRes = await paymentApi.prepare({
+      reservationId: reservation.value.id,
+      method: 'TOSS',
+    })
+    const { orderId } = prepRes.data
+    await paymentWidget.requestPayment({
+      orderId,
+      orderName: reservation.value.serviceName,
+      successUrl: `${window.location.origin}/payment/success`,
+      failUrl: `${window.location.origin}/payment/fail`,
+    })
+    // requestPayment redirects the page — code below won't run on success
+  } catch (e) {
+    // 사용자가 결제창을 닫은 경우 → 에러 메시지 없이 조용히 해제
+    if (e?.code === 'PAY_PROCESS_CANCELED' || e?.code === 'USER_CANCEL') {
+      paying.value = false
+      return
+    }
+    payError.value = e.response?.data?.message || e.message || '결제 처리 중 오류가 발생했습니다.'
+    paying.value = false
+  }
 }
 
 onMounted(async () => {
   try {
-    const res = await reservationApi.getById(reservationId)
+    const res = await reservationApi.getById(route.params.reservationId)
     reservation.value = res.data
-
-    const prepareRes = await paymentApi.prepare(Number(reservationId))
-    orderId.value = prepareRes.data.orderId
-  } catch (e) {
-    console.error('결제 준비 실패', e)
-    payError.value = '결제 초기화에 실패했습니다.'
+  } catch {
+    router.push('/')
+    return
   } finally {
     loading.value = false
   }
-  await loadTossScript()
+  // #payment-widget div is now in DOM (v-else rendered), init widget
+  await nextTick()
+  await initWidget()
 })
-
-async function handlePayment() {
-  if (!orderId.value) { payError.value = '주문 정보가 없습니다.'; return }
-  paying.value  = true
-  payError.value = ''
-  try {
-    if (!window.TossPayments) {
-      payError.value = '결제 모듈을 불러오지 못했습니다.'
-      return
-    }
-    const toss = window.TossPayments(import.meta.env.VITE_TOSS_CLIENT_KEY || 'test_ck_placeholder')
-    await toss.requestPayment(payMethod.value, {
-      amount:       reservation.value.totalPrice,
-      orderId:      orderId.value,
-      orderName:    reservation.value.serviceName,
-      customerName: authStore.user?.name || '고객',
-      successUrl:   `${window.location.origin}/payment/success`,
-      failUrl:      `${window.location.origin}/payment/fail`,
-    })
-    // 리다이렉트 발생
-  } catch (e) {
-    if (e.code === 'USER_CANCEL') {
-      payError.value = '결제가 취소되었습니다.'
-    } else {
-      payError.value = e.response?.data?.message || e.message || '결제 중 오류가 발생했습니다.'
-    }
-  } finally {
-    paying.value = false
-  }
-}
 </script>
 
 <style scoped>
-.page-header { margin-bottom: 20px; }
-.back-btn {
-  background: none; border: none;
-  color: var(--text-sub); font-size: 14px;
-  cursor: pointer; padding: 6px 0;
-  margin-bottom: 10px; display: block;
-  transition: var(--transition);
+.back-link {
+  display: inline-block; margin-bottom: 20px;
+  font-size: 13px; color: var(--text-muted); background: none; border: none; cursor: pointer; padding: 0;
 }
-.back-btn:hover { color: var(--primary); }
+.back-link:hover { color: var(--text); }
 
-.pay-layout {
-  display: grid;
-  grid-template-columns: 1fr 320px;
-  gap: 20px;
-  align-items: start;
-}
+.pay-title { font-size: 24px; font-weight: 800; letter-spacing: -0.03em; margin-bottom: 20px; }
+.pay-layout { display: grid; grid-template-columns: 1fr 320px; gap: 20px; align-items: start; }
+.pay-main { display: flex; flex-direction: column; gap: 16px; }
 
-.card-title {
-  font-size: 16px;
-  font-weight: 700;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border);
-}
+.card-section-title { font-size: 14px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 16px; }
 
-.info-card, .method-card { margin-bottom: 16px; }
+/* Reservation summary */
+.res-summary { display: flex; gap: 14px; align-items: center; }
+.res-avatar { width: 56px; height: 56px; border-radius: var(--radius-md); object-fit: cover; flex-shrink: 0; border: 1px solid var(--border); }
+.res-stylist { font-size: 16px; font-weight: 700; }
+.res-salon { font-size: 13px; color: var(--text-muted); margin: 2px 0 6px; }
+.res-meta-row { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-sub); }
+.meta-dot { color: var(--border-strong); }
 
-.res-info { display: flex; gap: 14px; align-items: center; }
-.res-avatar { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; flex-shrink: 0; border: 2px solid var(--border); }
-.res-detail { display: flex; flex-direction: column; gap: 4px; }
-.res-name { font-size: 15px; font-weight: 600; }
-.res-meta { font-size: 13px; color: var(--text-sub); }
-
-.method-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.method-btn {
-  display: flex; flex-direction: column;
-  align-items: center; gap: 6px;
-  padding: 14px 8px;
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-md);
-  background: #fff;
-  font-size: 12px; font-weight: 500; color: var(--text-sub);
-  cursor: pointer; transition: var(--transition);
-}
-.method-btn:hover { border-color: var(--primary); color: var(--primary); }
-.method-btn.selected { border-color: var(--primary); background: var(--primary-light); color: var(--primary); font-weight: 600; }
-.method-icon { font-size: 22px; }
+/* Toss widget */
+.widget-card { padding: 0; overflow: hidden; }
+#payment-widget { min-height: 50px; }
+#payment-agreement { margin-top: 4px; }
 
 /* Summary */
-.summary-card { position: sticky; top: calc(var(--navbar-h) + 16px); }
-.summary-rows { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
-.sr-row { display: flex; justify-content: space-between; font-size: 14px; color: var(--text-sub); }
-.sr-row.total { padding-top: 12px; border-top: 1px solid var(--border); color: var(--text); font-weight: 600; }
-.total-price { font-size: 20px; font-weight: 700; color: var(--primary); }
+.summary-rows { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+.summary-row { display: flex; justify-content: space-between; font-size: 14px; color: var(--text-sub); }
+.summary-divider { height: 1px; background: var(--border); margin: 4px 0; }
+.summary-row.total { font-size: 15px; font-weight: 700; color: var(--text); margin-top: 4px; }
+.total-price { font-size: 20px; font-weight: 800; color: var(--primary); }
 
-.msg-error { color: var(--red); font-size: 13px; margin-top: 8px; }
+.err-msg { color: var(--danger); font-size: 13px; margin-bottom: 12px; padding: 10px 14px; background: var(--danger-light); border-radius: var(--radius-sm); }
+.pay-btn { margin-bottom: 10px; padding: 14px; font-size: 16px; }
+.pay-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.pay-note { text-align: center; font-size: 12px; color: var(--text-muted); }
 
-.secure-badge {
-  display: flex; align-items: center; justify-content: center; gap: 6px;
-  margin-top: 14px; padding-top: 12px;
-  border-top: 1px solid var(--border);
-  font-size: 12px; color: var(--text-muted);
-}
-
-.state-center { text-align: center; padding: 80px 0; display: flex; flex-direction: column; align-items: center; gap: 12px; }
-.state-text { color: var(--text-sub); }
+.pay-sidebar { position: sticky; top: 76px; }
 
 @media (max-width: 768px) {
   .pay-layout { grid-template-columns: 1fr; }
-  .method-grid { grid-template-columns: repeat(2, 1fr); }
+  .pay-sidebar { position: static; }
 }
 </style>

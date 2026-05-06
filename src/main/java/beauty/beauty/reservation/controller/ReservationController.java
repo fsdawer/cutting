@@ -5,11 +5,10 @@ import beauty.beauty.reservation.dto.ReservationRequest;
 import beauty.beauty.reservation.dto.ReservationResponse;
 import beauty.beauty.reservation.service.ReservationService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-
-import java.util.List;
 
 import java.util.List;
 
@@ -26,7 +25,7 @@ public class ReservationController {
                                                   @RequestBody ReservationRequest reservationRequest) {
 
         ReservationResponse response = reservationService.createReservation(userId,reservationRequest);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     // GET  /api/reservations/my               내 예약 목록
