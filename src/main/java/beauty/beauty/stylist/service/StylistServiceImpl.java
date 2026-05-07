@@ -40,7 +40,14 @@ public class StylistServiceImpl implements StylistService {
 
     @Override
     public List<StylistProfileResponse> getStylists(String keyword, String location) {
-        return stylistProfileRepository.searchStylists(keyword, location)
+        if (keyword != null && !keyword.isBlank()) {
+            String kwWildcard = keyword.trim() + "*";
+            List<Long> ids = stylistProfileRepository.searchStylistIdsByFulltext(kwWildcard, location);
+            if (ids.isEmpty()) return List.of();
+            return stylistProfileRepository.findByIdIn(ids)
+                    .stream().map(StylistProfileResponse::from).collect(Collectors.toList());
+        }
+        return stylistProfileRepository.searchStylists(location)
                 .stream().map(StylistProfileResponse::from).collect(Collectors.toList());
     }
 

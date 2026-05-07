@@ -24,9 +24,19 @@ public interface StylistProfileRepository extends JpaRepository<StylistProfile, 
     @Query("SELECT DISTINCT s FROM StylistProfile s " +
             "JOIN FETCH s.user u " +
             "LEFT JOIN FETCH s.salon sal WHERE " +
-            "(:keyword IS NULL OR sal.name LIKE %:keyword% OR u.name LIKE %:keyword%) AND " +
             "(:location IS NULL OR sal.address LIKE %:location%)")
-    List<StylistProfile> searchStylists(@Param("keyword") String keyword, @Param("location") String location);
+    List<StylistProfile> searchStylists(@Param("location") String location);
+
+    // FULLTEXT 검색: keyword 있을 때만 호출 (salons.name, users.name에 FULLTEXT 인덱스 필요)
+    @Query(value = """
+            SELECT DISTINCT sp.id FROM stylist_profiles sp
+            JOIN users u ON sp.user_id = u.id
+            LEFT JOIN salons sal ON sp.salon_id = sal.id
+            WHERE (MATCH(sal.name) AGAINST(:keyword IN BOOLEAN MODE)
+                OR MATCH(u.name) AGAINST(:keyword IN BOOLEAN MODE))
+            AND (:location IS NULL OR sal.address LIKE CONCAT('%', :location, '%'))
+            """, nativeQuery = true)
+    List<Long> searchStylistIdsByFulltext(@Param("keyword") String keyword, @Param("location") String location);
 
     // 랭킹 조회용: 특정 구의 미용사 전체 조회 (Before: N+1 기반 랭킹 계산에 사용)
     @Query("SELECT DISTINCT sp FROM StylistProfile sp " +
