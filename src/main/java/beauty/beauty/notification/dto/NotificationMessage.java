@@ -3,6 +3,7 @@ package beauty.beauty.notification.dto;
 import lombok.*;
 
 @Getter
+@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor

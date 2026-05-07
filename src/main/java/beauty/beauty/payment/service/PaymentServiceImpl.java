@@ -84,7 +84,12 @@ public class PaymentServiceImpl implements PaymentService {
                 });
 
         // [Flow 2] 고유 주문번호(orderId) 생성 및 결제 엔티티 생성
-        String orderId = UUID.randomUUID().toString();
+        // UUID 원문 노출 방지: 16바이트를 Base64url로 인코딩 → 22자 불투명 문자열
+        UUID uuid = UUID.randomUUID();
+        java.nio.ByteBuffer bb = java.nio.ByteBuffer.allocate(16);
+        bb.putLong(uuid.getMostSignificantBits());
+        bb.putLong(uuid.getLeastSignificantBits());
+        String orderId = Base64.getUrlEncoder().withoutPadding().encodeToString(bb.array());
 
         Payment payment = Payment.builder()
                 .reservation(reservation) 

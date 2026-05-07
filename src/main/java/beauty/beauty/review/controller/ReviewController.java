@@ -21,6 +21,12 @@ public class ReviewController {
 
     private final ReviewService reviewService;
 
+    // GET /api/reviews/my
+    @GetMapping("/my")
+    public ResponseEntity<List<ReviewResponse>> getMyReviews(@LoginUserId Long userId) {
+        return ResponseEntity.ok(reviewService.getMyReviews(userId));
+    }
+
     // POST /api/reviews
     @PostMapping
     public ResponseEntity<ReviewResponse> create(

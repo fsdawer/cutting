@@ -1,7 +1,7 @@
 <template>
   <main class="page">
     <div class="container">
-      <button class="back-link" @click="$router.back()">← 뒤로가기</button>
+      <button class="back-link" @click="router.push(`/stylist/${route.params.stylistId}`)">← 뒤로가기</button>
 
       <div class="booking-grid">
 
@@ -26,8 +26,8 @@
                   v-for="day in daysInMonth"
                   :key="day"
                   class="cal-day"
-                  :class="{ selected: isSelectedDate(day), today: isTodayDate(day), disabled: isPastDate(day) }"
-                  :disabled="isPastDate(day)"
+                  :class="{ selected: isSelectedDate(day), today: isTodayDate(day), disabled: isPastDate(day) || isClosedDate(day) }"
+                  :disabled="isPastDate(day) || isClosedDate(day)"
                   @click="selectDate(day)"
                 >{{ day }}</button>
               </div>
@@ -126,18 +126,11 @@
                 </div>
               </div>
 
-              <!-- 토스 결제 위젯 -->
-              <div class="widget-wrap">
-                <div id="payment-widget"></div>
-                <div id="payment-agreement"></div>
-              </div>
-
-              <p v-if="widgetError" class="err-msg">{{ widgetError }}</p>
               <p v-if="payError" class="err-msg">{{ payError }}</p>
 
               <button
                 class="btn btn-primary btn-full pay-btn"
-                :disabled="paying || !widgetReady"
+                :disabled="paying"
                 @click="handlePay"
               >
                 <span v-if="paying" class="spinner" style="width:16px;height:16px;border-width:2px"></span>
@@ -178,10 +171,9 @@
 
       </div><!-- /booking-grid -->
     </div>
-  </main>
 
-  <!-- 빈자리 알림 모달 -->
-  <Teleport to="body">
+    <!-- 빈자리 알림 모달 -->
+    <Teleport to="body">
     <Transition name="modal">
       <div v-if="waitingModal.show" class="modal-overlay" @click.self="waitingModal.show = false">
         <div class="modal-box">
@@ -207,11 +199,12 @@
         </div>
       </div>
     </Transition>
-  </Teleport>
+    </Teleport>
+  </main>
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { stylistApi } from '@/api/stylist'
 import { reservationApi, waitingApi } from '@/api/reservation'
@@ -222,8 +215,9 @@ const route  = useRoute()
 const router = useRouter()
 const auth   = useAuthStore()
 
-const stylist  = ref(null)
-const services = ref([])
+const stylist       = ref(null)
+const services      = ref([])
+const workingHours  = ref([])
 
 const calYear  = ref(new Date().getFullYear())
 const calMonth = ref(new Date().getMonth())
@@ -234,25 +228,38 @@ const selectedServiceId = ref(route.query.serviceId ? Number(route.query.service
 const requestMemo       = ref('')
 const slotsLoading      = ref(false)
 const bookedTimes       = ref([])
-const paying            = ref(false)
-const payError          = ref('')
-const widgetError       = ref('')
-const widgetReady       = ref(false)
-const waitingModal      = ref({ show: false, time: '', loading: false, error: '' })
-const waitingSuccess    = ref('')
-
-let paymentWidget        = null
-let paymentMethodsWidget = null
+const paying         = ref(false)
+const payError       = ref('')
+const waitingModal   = ref({ show: false, time: '', loading: false, error: '' })
+const waitingSuccess = ref('')
 
 const selectedService = computed(() => services.value.find(s => s.id === selectedServiceId.value))
 
 const daysInMonth = computed(() => new Date(calYear.value, calMonth.value + 1, 0).getDate())
 const startBlank  = computed(() => new Date(calYear.value, calMonth.value, 1).getDay())
 
+// 백엔드 dayOfWeek: 0=월~6=일 / JS getDay(): 0=일~6=토 → 변환 필요
+function toBackendDay(jsDay) { return (jsDay + 6) % 7 }
+
+function getDayHours(day) {
+  const d = new Date(calYear.value, calMonth.value, day)
+  return workingHours.value.find(h => h.dayOfWeek === toBackendDay(d.getDay()))
+}
+
+function isClosedDate(day) {
+  const h = getDayHours(day)
+  return !h || h.isDayOff
+}
+
 const timeSlots = computed(() => {
+  if (!selectedDate.value) return []
+  const d = new Date(selectedDate.value)
+  const h = workingHours.value.find(wh => wh.dayOfWeek === toBackendDay(d.getDay()))
+  const open  = h ? parseInt(h.openTime.split(':')[0])  : 9
+  const close = h ? parseInt(h.closeTime.split(':')[0]) : 19
   const slots = []
-  for (let h = 9; h <= 19; h++) {
-    const time = `${String(h).padStart(2,'0')}:00`
+  for (let hr = open; hr < close; hr++) {
+    const time = `${String(hr).padStart(2,'0')}:00`
     slots.push({ time, booked: bookedTimes.value.includes(time) })
   }
   return slots
@@ -278,7 +285,7 @@ function isPastDate(day) {
 }
 
 async function selectDate(day) {
-  if (isPastDate(day)) return
+  if (isPastDate(day) || isClosedDate(day)) return
   selectedDate.value = `${calYear.value}-${String(calMonth.value+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`
   selectedTime.value = ''
   slotsLoading.value = true
@@ -310,68 +317,15 @@ async function registerWaiting() {
   }
 }
 
-// ── Toss 위젯 ──────────────────────────────────────────────────────────────
-
-async function initWidget(price) {
-  widgetError.value = ''
-  widgetReady.value = false
-
-  if (!window.PaymentWidget) {
-    widgetError.value = '결제 모듈을 불러올 수 없습니다. 페이지를 새로고침해주세요.'
-    return
-  }
-  if (!price || price <= 0) return
-
-  try {
-    // 위젯이 이미 있으면 컨테이너를 비우고 재생성
-    const container = document.getElementById('payment-widget')
-    if (container) container.innerHTML = ''
-    const agreeContainer = document.getElementById('payment-agreement')
-    if (agreeContainer) agreeContainer.innerHTML = ''
-
-    paymentWidget = window.PaymentWidget(
-      import.meta.env.VITE_TOSS_CLIENT_KEY,
-      window.PaymentWidget.ANONYMOUS,
-    )
-    paymentMethodsWidget = await paymentWidget.renderPaymentMethods(
-      '#payment-widget',
-      { value: price },
-    )
-    try {
-      await paymentWidget.renderAgreement('#payment-agreement')
-    } catch { /* 약관 위젯 미지원 무시 */ }
-    widgetReady.value = true
-  } catch (e) {
-    console.error('[Toss Widget]', e)
-    widgetError.value = `결제 위젯 오류: ${e.message}`
-  }
-}
-
-// 날짜·시간·서비스 중 하나라도 바뀌면 결제 위젯 초기화/갱신
-watch([selectedDate, selectedTime, selectedServiceId], async ([date, time, serviceId]) => {
-  if (!date || !time || !serviceId) return
-  const svc = services.value.find(s => s.id === serviceId)
-  if (!svc) return
-
-  await nextTick() // #payment-widget 이 DOM에 렌더링될 때까지 대기
-
-  if (paymentMethodsWidget) {
-    try { await paymentMethodsWidget.updateAmount(svc.price); return } catch {}
-  }
-  await initWidget(svc.price)
-})
-
 // ── 결제 처리 ───────────────────────────────────────────────────────────────
 
 async function handlePay() {
   payError.value = ''
   if (!selectedDate.value || !selectedTime.value) { payError.value = '날짜와 시간을 선택해주세요.'; return }
   if (!selectedServiceId.value) { payError.value = '서비스를 선택해주세요.'; return }
-  if (!paymentWidget) { payError.value = '결제 위젯이 준비되지 않았습니다. 잠시 후 다시 시도해주세요.'; return }
 
   paying.value = true
   try {
-    // 1. 예약 생성 (PENDING)
     const reservedAt = `${selectedDate.value}T${selectedTime.value}:00`
     const resRes = await reservationApi.create({
       stylistId: Number(route.params.stylistId),
@@ -381,21 +335,21 @@ async function handlePay() {
     })
     const reservationId = resRes.data.id
 
-    // 2. 결제 준비 (orderId 발급)
     const prepRes = await paymentApi.prepare({ reservationId, method: 'TOSS' })
     const { orderId } = prepRes.data
 
-    // 3. 토스 결제창 (리다이렉트)
-    await paymentWidget.requestPayment({
+    const tossPayments = window.TossPayments(import.meta.env.VITE_TOSS_CLIENT_KEY)
+    const payment = tossPayments.payment({ customerKey: window.TossPayments.ANONYMOUS })
+    await payment.requestPayment({
+      method: 'CARD',
+      amount: { currency: 'KRW', value: selectedService.value.price },
       orderId,
-      orderName: selectedService.value?.name,
+      orderName: selectedService.value.name,
       successUrl: `${window.location.origin}/payment/success`,
       failUrl:    `${window.location.origin}/payment/fail`,
     })
-    // requestPayment 후 리다이렉트되므로 아래 코드는 실행되지 않음
   } catch (e) {
     if (e?.code === 'PAY_PROCESS_CANCELED' || e?.code === 'USER_CANCEL') {
-      // 사용자가 결제창을 닫음 → PENDING 예약은 10분 후 스케줄러가 정리
       paying.value = false
       return
     }
@@ -410,16 +364,11 @@ onMounted(async () => {
   const id = route.params.stylistId
   try {
     const res = await stylistApi.getStylist(id)
-    stylist.value  = res.data
-    services.value = res.data.services || []
+    stylist.value       = res.data
+    services.value      = res.data.services      || []
+    workingHours.value  = res.data.workingHours  || []
     if (route.query.time) selectedTime.value = route.query.time
-
-    // 쿼리로 서비스가 미리 선택된 경우 위젯 즉시 초기화
-    if (selectedServiceId.value) {
-      await nextTick()
-      const svc = services.value.find(s => s.id === selectedServiceId.value)
-      if (svc) await initWidget(svc.price)
-    }
+    // 위젯 초기화는 watch가 담당 (date+time+service 모두 설정된 후)
   } catch {}
 })
 </script>

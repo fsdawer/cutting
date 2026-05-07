@@ -95,6 +95,13 @@
           </div>
         </div>
       </div>
+
+      <div v-if="hasMore" style="display:flex;justify-content:center;padding:16px 0">
+        <button class="btn btn-ghost" :disabled="loadingMore" @click="loadMore">
+          <span v-if="loadingMore" class="spinner" style="width:14px;height:14px;border-width:2px"></span>
+          <span v-else>더 보기</span>
+        </button>
+      </div>
     </div>
   </main>
 </template>
@@ -104,7 +111,10 @@ import { ref, computed, onMounted } from 'vue'
 import { reservationApi } from '@/api/reservation'
 
 const loading = ref(false)
+const loadingMore = ref(false)
 const reservations = ref([])
+const hasMore = ref(false)
+const nextCursorId = ref(null)
 const activeTab = ref('all')
 
 const tabs = [
@@ -128,11 +138,21 @@ function formatDate(str) {
   return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
 }
 
-async function loadReservations() {
-  loading.value = true
-  try { const res = await reservationApi.getStylistReservations(); reservations.value = res.data || [] }
-  catch { reservations.value = [] }
-  finally { loading.value = false }
+async function loadReservations(cursorId = null, append = false) {
+  if (!append) loading.value = true
+  else loadingMore.value = true
+  try {
+    const res = await reservationApi.getStylistReservations(cursorId)
+    const content = res.data.content || []
+    reservations.value = append ? [...reservations.value, ...content] : content
+    hasMore.value = res.data.hasMore
+    nextCursorId.value = res.data.nextCursorId
+  } catch { if (!append) reservations.value = [] }
+  finally { loading.value = false; loadingMore.value = false }
+}
+
+async function loadMore() {
+  await loadReservations(nextCursorId.value, true)
 }
 
 async function updateStatus(id, status) {
@@ -141,7 +161,7 @@ async function updateStatus(id, status) {
   catch (e) { alert(e.response?.data?.message || '상태 변경 오류') }
 }
 
-onMounted(loadReservations)
+onMounted(() => loadReservations())
 </script>
 
 <style scoped>

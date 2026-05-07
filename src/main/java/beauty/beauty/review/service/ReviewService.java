@@ -27,4 +27,7 @@ public interface ReviewService {
 
     // 리뷰 삭제 — 본인만 가능, stylistProfile.rating/reviewCount 재계산
     void delete(Long userId, Long reviewId);
+
+    // 내 리뷰 목록 (마이페이지용)
+    List<ReviewResponse> getMyReviews(Long userId);
 }

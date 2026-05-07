@@ -29,6 +29,7 @@ import java.util.concurrent.Executor;
  */
 @Configuration
 @EnableAsync
+@org.springframework.scheduling.annotation.EnableScheduling
 public class AsyncConfig {
 
     @Bean(name = "reservationTaskExecutor")

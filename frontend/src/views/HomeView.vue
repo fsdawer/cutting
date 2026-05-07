@@ -26,13 +26,6 @@
               <button class="btn btn-primary search-btn" @click="search">검색</button>
             </div>
             <div class="search-actions">
-              <button
-                class="btn btn-ghost btn-sm nearby-btn"
-                :class="{ active: isNearbyMode }"
-                @click="toggleNearby"
-              >
-                {{ isNearbyMode ? '주변 검색 끄기' : '내 주변 검색' }}
-              </button>
               <div class="quick-tags">
                 <button v-for="tag in popularTags" :key="tag" class="tag-chip" @click="searchQuery = tag; search()">{{ tag }}</button>
               </div>
@@ -41,33 +34,6 @@
         </div>
       </div>
     </section>
-
-    <!-- 지도 -->
-    <div v-if="isNearbyMode" class="map-section">
-      <div class="container">
-        <p v-if="nearbyError" class="nearby-error">{{ nearbyError }}</p>
-        <!-- 지도 + 내 위치 이동 버튼 래퍼 -->
-        <div class="map-wrap">
-          <div ref="mapContainer" class="map-container"></div>
-          <!-- 과녁 버튼: 클릭 시 내 위치로 지도 중심 이동 -->
-          <button
-            v-if="mapInstance"
-            class="recenter-btn"
-            title="내 위치로 이동"
-            @click="recenterMap"
-          >
-            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" width="20" height="20">
-              <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/>
-              <circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.8"/>
-              <line x1="12" y1="2" x2="12" y2="5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-              <line x1="12" y1="19" x2="12" y2="22" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-              <line x1="2" y1="12" x2="5" y2="12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-              <line x1="19" y1="12" x2="22" y2="12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-            </svg>
-          </button>
-        </div>
-      </div>
-    </div>
 
     <div class="container content-area">
       <!-- 필터 바 -->
@@ -156,7 +122,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import StylistCard from '@/components/StylistCard.vue'
 import { stylistApi } from '@/api/stylist'
 import { rankingApi } from '@/api/ranking'
@@ -167,11 +133,6 @@ const activeFilter = ref('all')
 const sortBy       = ref('rating')
 const loading      = ref(false)
 const stylists     = ref([])
-const isNearbyMode = ref(false)
-const nearbyError  = ref('')
-const mapContainer = ref(null)
-const mapInstance  = ref(null)   // 카카오 Map 인스턴스 보관 → recenterMap()에서 재활용
-const myLocation   = ref(null)   // { lat, lng } — 내 위치 좌표 보관
 
 const rankDistrict = ref('강남구')
 const rankLoading  = ref(false)
@@ -211,117 +172,6 @@ function resetSearch() {
   searchQuery.value = ''
   locationQuery.value = ''
   search()
-}
-
-// 카카오 지도 SDK가 완전히 로드될 때까지 최대 5초 폴링 대기
-// index.html의 <script> 태그가 SPA 번들보다 늦게 실행될 수 있기 때문에 필요
-function waitForKakaoSDK(timeout = 5000) {
-  return new Promise((resolve, reject) => {
-    console.log('[Kakao] SDK 체크 시작 — window.kakao:', !!window.kakao, '/ window.kakao?.maps:', !!(window.kakao?.maps))
-    if (window.kakao && window.kakao.maps) {
-      console.log('[Kakao] SDK 이미 로드됨 → 즉시 resolve')
-      return resolve()
-    }
-    const interval = 100
-    let elapsed = 0
-    const timer = setInterval(() => {
-      elapsed += interval
-      if (window.kakao && window.kakao.maps) {
-        clearInterval(timer)
-        console.log(`[Kakao] SDK 로드 완료 (${elapsed}ms 경과)`)
-        resolve()
-      } else if (elapsed >= timeout) {
-        clearInterval(timer)
-        console.error('[Kakao] SDK 로드 타임아웃 — index.html <script> 태그 확인 필요')
-        nearbyError.value = '카카오 지도 SDK 로드에 실패했습니다. 페이지를 새로고침 해주세요.'
-        reject(new Error('Kakao SDK timeout'))
-      }
-    }, interval)
-  })
-}
-
-async function toggleNearby() {
-  if (isNearbyMode.value) { isNearbyMode.value = false; mapInstance.value = null; return }
-  nearbyError.value = ''
-  if (!navigator.geolocation) { nearbyError.value = '위치 서비스를 지원하지 않는 브라우저입니다.'; return }
-  navigator.geolocation.getCurrentPosition(async pos => {
-    const { latitude: lat, longitude: lng } = pos.coords
-    console.log(`[Map] ① 위치 획득 성공 — lat=${lat}, lng=${lng}`)
-    isNearbyMode.value = true
-    loading.value = true
-    try {
-      // [1] 주변 미용사 조회 — 실패해도 지도는 보여줌
-      try {
-        const res = await stylistApi.getNearbyStylists(lat, lng, 3000)
-        stylists.value = res.data
-        console.log(`[Map] ② API 응답 — 스타일리스트 수: ${res.data.length}`, res.data)
-        if (res.data.length === 0) {
-          nearbyError.value = '반경 3km 내 등록된 미용사가 없습니다.'
-        }
-      } catch (apiErr) {
-        stylists.value = []
-        console.error('[Map] ② API 호출 실패:', apiErr)
-        nearbyError.value = '주변 미용사 정보를 불러올 수 없습니다.'
-      }
-      // [2] DOM 렌더 대기 후 지도 초기화 (API 성공/실패 무관)
-      await nextTick()
-      console.log('[Map] ③ nextTick 완료 — mapContainer el:', mapContainer.value)
-      await waitForKakaoSDK()
-      console.log('[Map] ④ kakao.maps.load() 호출 시도')
-      window.kakao.maps.load(() => {
-        console.log('[Map] ⑤ kakao.maps.load 콜백 진입 — initMap 호출')
-        initMap(lat, lng)
-      })
-    } catch (e) {
-      console.error('[Map] 치명적 오류:', e)
-      nearbyError.value = nearbyError.value || '오류가 발생했습니다.'
-    } finally { loading.value = false }
-  }, (geoErr) => {
-    console.error('[Map] 위치 획득 실패:', geoErr)
-    nearbyError.value = '위치 정보를 가져올 수 없습니다. 브라우저 위치 권한을 허용해주세요.'
-  })
-}
-
-function initMap(lat, lng) {
-  console.log('[Map] ⑥ initMap 진입 — mapContainer.value:', mapContainer.value)
-  if (!mapContainer.value) {
-    console.error('[Map] ⑥ initMap 실패 — mapContainer ref가 null (v-if DOM 미렌더)') 
-    return
-  }
-  myLocation.value = { lat, lng }
-  const center = new window.kakao.maps.LatLng(lat, lng)
-  console.log('[Map] ⑦ Map 생성 시작 — center:', center)
-  const map = new window.kakao.maps.Map(mapContainer.value, { center, level: 4 })
-  mapInstance.value = map
-  console.log('[Map] ⑧ Map 생성 완료 — mapInstance 저장됨')
-  // 내 위치 마커
-  const myMarker = new window.kakao.maps.Marker({ map, position: center })
-  const myInfo = new window.kakao.maps.InfoWindow({
-    content: '<div style="padding:6px 10px;font-size:12px;font-weight:700;color:#059669">내 위치</div>',
-  })
-  myInfo.open(map, myMarker)
-  // 주변 스타일리스트 마커
-  let markerCount = 0
-  stylists.value.forEach(s => {
-    if (!s.latitude || !s.longitude) return
-    const pos = new window.kakao.maps.LatLng(s.latitude, s.longitude)
-    const marker = new window.kakao.maps.Marker({ map, position: pos })
-    const info = new window.kakao.maps.InfoWindow({
-      content: `<div style="padding:6px 10px;font-size:13px;font-weight:600;cursor:pointer" onclick="location.href='/stylist/${s.id}'">${s.name}<br/><span style="font-size:11px;color:#6b7280">${s.salonName || ''}</span></div>`,
-    })
-    window.kakao.maps.event.addListener(marker, 'click', () => info.open(map, marker))
-    markerCount++
-  })
-  console.log(`[Map] ⑨ 마커 렌더 완료 — 내 위치 1개 + 스타일리스트 ${markerCount}개`)
-}
-
-// 과녁 버튼 클릭 → 저장된 내 위치로 지도 중심 재이동
-function recenterMap() {
-  if (!mapInstance.value || !myLocation.value) return
-  const { lat, lng } = myLocation.value
-  const center = new window.kakao.maps.LatLng(lat, lng)
-  mapInstance.value.setCenter(center)
-  mapInstance.value.setLevel(4)  // zoom 레벨도 원래대로
 }
 
 async function loadRanking() {
@@ -374,36 +224,6 @@ onMounted(() => { search(); loadRanking() })
   cursor: pointer; transition: var(--transition);
 }
 .tag-chip:hover { border-color: var(--primary); color: var(--primary); background: var(--bg-surface); }
-
-/* Map */
-.map-section { padding: 0 0 24px; }
-.map-wrap { position: relative; }
-.map-container { width: 100%; height: 320px; border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--border); }
-.nearby-error { color: var(--danger); font-size: 13px; margin-bottom: 8px; padding: 10px 14px; background: var(--danger-light); border-radius: var(--radius-sm); }
-
-/* 과녁(내 위치로 이동) 버튼 */
-.recenter-btn {
-  position: absolute;
-  bottom: 12px;
-  right: 12px;
-  z-index: 10;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: var(--bg-card, #fff);
-  border: 1.5px solid var(--border);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  color: var(--primary);
-  transition: transform 0.15s, box-shadow 0.15s;
-}
-.recenter-btn:hover {
-  transform: scale(1.1);
-  box-shadow: 0 4px 14px rgba(0,0,0,0.2);
-}
 
 /* Content */
 .content-area { padding-top: 28px; }

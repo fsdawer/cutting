@@ -1,7 +1,7 @@
 <template>
   <main class="page">
     <div class="container">
-      <button class="back-link" @click="$router.back()">← 뒤로가기</button>
+      <button class="back-link" @click="router.push('/mypage')">← 뒤로가기</button>
 
       <div v-if="loading" class="state-center">
         <div class="spinner"></div>
@@ -12,7 +12,6 @@
         <div class="pay-main">
           <h1 class="pay-title">결제</h1>
 
-          <!-- 예약 요약 -->
           <div class="card info-card">
             <h2 class="card-section-title">예약 내역</h2>
             <div class="res-summary">
@@ -28,17 +27,8 @@
               </div>
             </div>
           </div>
-
-          <!-- 토스 결제 위젯 -->
-          <div class="card widget-card">
-            <div id="payment-widget"></div>
-          </div>
-          <div id="payment-agreement"></div>
-
-          <p v-if="widgetError" class="err-msg">{{ widgetError }}</p>
         </div>
 
-        <!-- 결제 요약 사이드바 -->
         <aside class="pay-sidebar">
           <div class="card summary-card">
             <h2 class="card-section-title">결제 요약</h2>
@@ -62,7 +52,7 @@
 
             <button
               class="btn btn-primary btn-full pay-btn"
-              :disabled="paying || !widgetReady"
+              :disabled="paying"
               @click="handlePay"
             >
               <span v-if="paying" class="spinner" style="width:16px;height:16px;border-width:2px"></span>
@@ -77,7 +67,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { reservationApi } from '@/api/reservation'
 import { paymentApi } from '@/api/payment'
@@ -89,10 +79,6 @@ const reservation = ref({})
 const loading     = ref(true)
 const paying      = ref(false)
 const payError    = ref('')
-const widgetError = ref('')
-const widgetReady = ref(false)
-
-let paymentWidget = null
 
 function formatDate(str) {
   if (!str) return ''
@@ -100,26 +86,7 @@ function formatDate(str) {
   return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
 }
 
-async function initWidget() {
-  if (!window.PaymentWidget) {
-    widgetError.value = '토스페이먼츠 SDK를 불러올 수 없습니다.'
-    return
-  }
-  try {
-    paymentWidget = window.PaymentWidget(import.meta.env.VITE_TOSS_CLIENT_KEY, window.PaymentWidget.ANONYMOUS)
-    await paymentWidget.renderPaymentMethods('#payment-widget', { value: reservation.value.totalPrice })
-    try {
-      await paymentWidget.renderAgreement('#payment-agreement')
-    } catch { /* 약관 위젯 미지원 시 무시 */ }
-    widgetReady.value = true
-  } catch (e) {
-    widgetError.value = '결제 위젯 초기화에 실패했습니다.'
-    console.error('[Toss Widget]', e)
-  }
-}
-
 async function handlePay() {
-  if (!paymentWidget) return
   paying.value = true
   payError.value = ''
   try {
@@ -128,15 +95,18 @@ async function handlePay() {
       method: 'TOSS',
     })
     const { orderId } = prepRes.data
-    await paymentWidget.requestPayment({
+
+    const tossPayments = window.TossPayments(import.meta.env.VITE_TOSS_CLIENT_KEY)
+    const payment = tossPayments.payment({ customerKey: window.TossPayments.ANONYMOUS })
+    await payment.requestPayment({
+      method: 'CARD',
+      amount: { currency: 'KRW', value: reservation.value.totalPrice },
       orderId,
       orderName: reservation.value.serviceName,
       successUrl: `${window.location.origin}/payment/success`,
-      failUrl: `${window.location.origin}/payment/fail`,
+      failUrl:    `${window.location.origin}/payment/fail`,
     })
-    // requestPayment redirects the page — code below won't run on success
   } catch (e) {
-    // 사용자가 결제창을 닫은 경우 → 에러 메시지 없이 조용히 해제
     if (e?.code === 'PAY_PROCESS_CANCELED' || e?.code === 'USER_CANCEL') {
       paying.value = false
       return
@@ -152,13 +122,9 @@ onMounted(async () => {
     reservation.value = res.data
   } catch {
     router.push('/')
-    return
   } finally {
     loading.value = false
   }
-  // #payment-widget div is now in DOM (v-else rendered), init widget
-  await nextTick()
-  await initWidget()
 })
 </script>
 
@@ -175,7 +141,6 @@ onMounted(async () => {
 
 .card-section-title { font-size: 14px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 16px; }
 
-/* Reservation summary */
 .res-summary { display: flex; gap: 14px; align-items: center; }
 .res-avatar { width: 56px; height: 56px; border-radius: var(--radius-md); object-fit: cover; flex-shrink: 0; border: 1px solid var(--border); }
 .res-stylist { font-size: 16px; font-weight: 700; }
@@ -183,12 +148,6 @@ onMounted(async () => {
 .res-meta-row { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-sub); }
 .meta-dot { color: var(--border-strong); }
 
-/* Toss widget */
-.widget-card { padding: 0; overflow: hidden; }
-#payment-widget { min-height: 50px; }
-#payment-agreement { margin-top: 4px; }
-
-/* Summary */
 .summary-rows { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
 .summary-row { display: flex; justify-content: space-between; font-size: 14px; color: var(--text-sub); }
 .summary-divider { height: 1px; background: var(--border); margin: 4px 0; }

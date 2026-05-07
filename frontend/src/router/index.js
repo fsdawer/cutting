@@ -9,6 +9,11 @@ const routes = [
     component: () => import('@/views/HomeView.vue'),
   },
   {
+    path: '/nearby',
+    name: 'Nearby',
+    component: () => import('@/views/NearbyView.vue'),
+  },
+  {
     path: '/login',
     name: 'Login',
     component: () => import('@/views/LoginView.vue'),
@@ -70,6 +75,30 @@ const routes = [
     path: '/mypage',
     name: 'MyPage',
     component: () => import('@/views/MyPageView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/mypage/reservations',
+    name: 'MyReservations',
+    component: () => import('@/views/MyPageReservationsView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/mypage/favorites',
+    name: 'MyFavorites',
+    component: () => import('@/views/MyPageFavoritesView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/mypage/reviews',
+    name: 'MyReviews',
+    component: () => import('@/views/MyPageReviewsView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/mypage/settings',
+    name: 'MySettings',
+    component: () => import('@/views/MyPageSettingsView.vue'),
     meta: { requiresAuth: true },
   },
   {

@@ -3,7 +3,10 @@
     <Navbar />
     <RouterView v-slot="{ Component, route }">
       <Transition name="fade" mode="out-in">
-        <component :is="Component" :key="route.path" />
+        <!-- keep-alive: 보여준 페이지 컬러를 메모리에 유지 → 뒤로가기 시 re-mount 없이 즉시 복원 -->
+        <keep-alive :include="['HomeView', 'RankingView']" :max="10">
+          <component :is="Component" :key="route.path" />
+        </keep-alive>
       </Transition>
     </RouterView>
     <ChatWidget v-if="auth.isLoggedIn" />

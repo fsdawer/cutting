@@ -144,6 +144,16 @@ public class ReviewServiceImpl implements ReviewService {
 
 
 
+    // 내 리뷰 목록
+    @Override
+    @Transactional(readOnly = true)
+    public List<ReviewResponse> getMyReviews(Long userId) {
+        return reviewRepository.findByUserIdWithDetails(userId)
+                .stream()
+                .map(ReviewResponse::from)
+                .toList();
+    }
+
     // 리뷰 삭제
     @Override
     public void delete(Long userId, Long reviewId) {

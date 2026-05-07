@@ -10,7 +10,12 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "reviews")
+@Table(name = "reviews", indexes = {
+    // 미용사 리뷰 목록: WHERE stylist_id = ? ORDER BY created_at DESC
+    @Index(name = "idx_review_stylist_created", columnList = "stylist_id, created_at"),
+    // 내 리뷰 목록: WHERE user_id = ?
+    @Index(name = "idx_review_user", columnList = "user_id"),
+})
 @Getter @Setter
 @NoArgsConstructor @AllArgsConstructor @Builder
 public class Review {

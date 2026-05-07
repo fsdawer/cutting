@@ -1,7 +1,10 @@
 package beauty.beauty.reservation.service;
 
+import beauty.beauty.reservation.dto.CursorResponse;
 import beauty.beauty.reservation.dto.ReservationRequest;
 import beauty.beauty.reservation.dto.ReservationResponse;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
@@ -27,7 +30,9 @@ public interface ReservationService {
      * @param userId 예약을 조회하려는 사용자(USER)의 ID
      * @return 사용자의 예약 내역 목록 (ReservationResponse DTO 리스트)
      */
-    List<ReservationResponse> getMyReservations(Long userId);
+    Page<ReservationResponse> getMyReservations(Long userId, Pageable pageable);
+
+    CursorResponse<ReservationResponse> getMyReservationsCursor(Long userId, Long lastId, int size);
 
 
 
@@ -65,7 +70,7 @@ public interface ReservationService {
      * @param userId 조회를 요청하는 미용사(STYLIST)의 ID
      * @return 미용사에게 들어온 예약 내역 목록
      */
-    List<ReservationResponse> getStylistReservations(Long userId);
+    CursorResponse<ReservationResponse> getStylistReservations(Long userId, Long lastId, int size);
 
     
 

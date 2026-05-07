@@ -6,7 +6,12 @@ import lombok.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "messages")
+@Table(name = "messages", indexes = {
+    // 채팅방 메시지 목록: WHERE room_id=? ORDER BY created_at ASC
+    @Index(name = "idx_msg_room_created", columnList = "room_id, created_at"),
+    // cursor 기반 미읽음 카운트: WHERE room_id=? AND sender_id!=? AND id>?
+    @Index(name = "idx_msg_room_sender_id", columnList = "room_id, sender_id, id"),
+})
 @Getter @Setter
 @NoArgsConstructor @AllArgsConstructor @Builder
 public class Message {

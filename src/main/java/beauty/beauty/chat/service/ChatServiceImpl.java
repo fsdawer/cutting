@@ -37,6 +37,7 @@ public class ChatServiceImpl implements ChatService {
     private final StylistProfileRepository stylistProfileRepository;
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper redisObjectMapper;
+    private final ChatReadService chatReadService;
 
     @Override
     @Transactional
@@ -86,7 +87,10 @@ public class ChatServiceImpl implements ChatService {
                 ));
 
         return all.stream()
-                .map(room -> ChatRoomResponse.from(room, salonNameMap.get(room.getStylistUser().getId())))
+                .map(room -> ChatRoomResponse.from(
+                        room,
+                        salonNameMap.get(room.getStylistUser().getId()),
+                        chatReadService.getUnreadCount(room.getId(), userId)))
                 .toList();
     }
 
@@ -129,7 +133,8 @@ public class ChatServiceImpl implements ChatService {
     public void markAsRead(Long userId, Long roomId) {
         ChatRoom room = findRoomOrThrow(roomId);
         checkAccess(userId, room);
-        messageRepository.markMessagesAsRead(roomId, userId);
+        // Redis에 lastReadId 저장 (O(1)) — DB UPDATE는 제거해 쓰기 부하 감소
+        chatReadService.markAsRead(roomId, userId);
     }
 
     private void publishToRedis(Long roomId, MessageResponse response) {

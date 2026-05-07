@@ -6,7 +6,13 @@ import java.time.LocalDateTime;
 import org.locationtech.jts.geom.Point;
 
 @Entity
-@Table(name = "salons")
+@Table(name = "salons", indexes = {
+    // 지역별 랭킹 조회: WHERE district = ?
+    @Index(name = "idx_salon_district", columnList = "district"),
+    // name LIKE '검색어%' 패턴 시 prefix 인덱스 활용 가능 (중간 LIKE는 불가)
+    @Index(name = "idx_salon_name", columnList = "name"),
+    // SPATIAL INDEX는 JPA로 생성 불가 → sql/add_spatial_index.sql 참고
+})
 @Getter @Setter
 @NoArgsConstructor @AllArgsConstructor @Builder
 public class Salon {

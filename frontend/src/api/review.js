@@ -15,4 +15,7 @@ export const reviewApi = {
 
   /** DELETE /api/reviews/{reviewId} — 리뷰 삭제 */
   remove: (reviewId) => api.delete(`/api/reviews/${reviewId}`),
+
+  /** GET /api/reviews/my — 내 리뷰 목록 */
+  getMyReviews: () => api.get('/api/reviews/my'),
 }

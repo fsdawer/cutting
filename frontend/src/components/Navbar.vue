@@ -8,12 +8,10 @@
 
       <ul class="nav-links">
         <li><RouterLink to="/" class="nav-link">홈</RouterLink></li>
+        <li><RouterLink to="/nearby" class="nav-link">내 주변</RouterLink></li>
         <li><RouterLink to="/ranking" class="nav-link">랭킹</RouterLink></li>
         <li v-if="auth.isStylist">
           <RouterLink to="/stylist/reservations" class="nav-link">예약 관리</RouterLink>
-        </li>
-        <li v-if="auth.isStylist">
-          <RouterLink to="/stylist/manage" class="nav-link">프로필 관리</RouterLink>
         </li>
         <li v-if="auth.isLoggedIn">
           <RouterLink to="/mypage" class="nav-link">마이페이지</RouterLink>
@@ -80,9 +78,9 @@
     <Transition name="drawer">
       <div v-if="mobileOpen" class="mobile-drawer">
         <RouterLink to="/" class="drawer-item" @click="mobileOpen = false">홈</RouterLink>
+        <RouterLink to="/nearby" class="drawer-item" @click="mobileOpen = false">내 주변</RouterLink>
         <RouterLink to="/ranking" class="drawer-item" @click="mobileOpen = false">랭킹</RouterLink>
         <RouterLink v-if="auth.isStylist" to="/stylist/reservations" class="drawer-item" @click="mobileOpen = false">예약 관리</RouterLink>
-        <RouterLink v-if="auth.isStylist" to="/stylist/manage" class="drawer-item" @click="mobileOpen = false">프로필 관리</RouterLink>
         <RouterLink v-if="auth.isLoggedIn" to="/mypage" class="drawer-item" @click="mobileOpen = false">마이페이지</RouterLink>
         <template v-if="!auth.isLoggedIn">
           <RouterLink to="/login" class="drawer-item" @click="mobileOpen = false">로그인</RouterLink>

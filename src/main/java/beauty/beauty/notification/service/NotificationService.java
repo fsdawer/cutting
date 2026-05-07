@@ -3,30 +3,34 @@ package beauty.beauty.notification.service;
 import beauty.beauty.notification.dto.NotificationMessage;
 import beauty.beauty.reservation.entity.Reservation;
 import lombok.RequiredArgsConstructor;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.ObjectMapper;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 
-/**
- * Redis Stream 리스너에서 호출되며 @Async로 별도 스레드에서 WebSocket 전송.
- * Stream 소비 스레드를 블로킹하지 않음.
- */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class NotificationService {
 
-    private final SimpMessagingTemplate messagingTemplate;
+    private final SseEmitterService    sseEmitterService;
+    private final StringRedisTemplate  stringRedisTemplate;
+    private final ObjectMapper         redisObjectMapper;
+
+    private static final String PENDING_KEY_PREFIX = "notifications:";
+    private static final Duration PENDING_TTL = Duration.ofDays(7);
 
     @Async("reservationTaskExecutor")
     public void notifyReservationCreated(Reservation reservation) {
-        // [Flow 1] 알림에 필요한 메타데이터 추출
         Long stylistUserId = reservation.getStylistProfile().getUser().getId();
-        Long clientUserId = reservation.getUser().getId();
+        Long clientUserId  = reservation.getUser().getId();
 
-        // [Flow 2] 알림 메시지 객체 생성
         NotificationMessage msg = NotificationMessage.builder()
                 .type("RESERVATION_CREATED")
                 .reservationId(reservation.getId())
@@ -36,12 +40,8 @@ public class NotificationService {
                 .message("새 예약이 확정되었습니다.")
                 .build();
 
-        // [Flow 3] WebSocket / Message Broker를 통한 실제 전송 (외부 네트워크 I/O)
-        // 이 전송 작업이 느려져도 메인 스레드나 Redis Stream Consumer를 막지 않도록 @Async 스레드풀을 사용합니다.
-        // 동기 전송 1: 미용사에게 알림
-        messagingTemplate.convertAndSend("/topic/notification/" + stylistUserId, msg);
-        // 동기 전송 2: 고객에게 알림
-        messagingTemplate.convertAndSend("/topic/notification/" + clientUserId, msg);
+        sendAndPersist(stylistUserId, msg);
+        sendAndPersist(clientUserId, msg);
     }
 
     @Async("reservationTaskExecutor")
@@ -52,6 +52,53 @@ public class NotificationService {
                 .reservedAt(date + "T" + time)
                 .message(dateLabel + " 빈자리가 생겼습니다!")
                 .build();
-        messagingTemplate.convertAndSend("/topic/notification/" + userId, msg);
+        sendAndPersist(userId, msg);
+    }
+
+    @Async("reservationTaskExecutor")
+    public void sendReminderAsync(Reservation reservation, String timing) {
+        String label = "1D".equals(timing) ? "내일" : "1시간 후";
+        NotificationMessage msg = NotificationMessage.builder()
+                .type("RESERVATION_REMINDER_" + timing)
+                .reservationId(reservation.getId())
+                .stylistName(reservation.getStylistProfile().getUser().getName())
+                .clientName(reservation.getUser().getName())
+                .reservedAt(reservation.getReservedAt().toString())
+                .message(label + " 예약이 있습니다.")
+                .build();
+        sendAndPersist(reservation.getUser().getId(), msg);
+    }
+
+    // SSE 즉시 전송 + Redis List 보관 (연결 해제 시 재연결 후 수신)
+    private void sendAndPersist(Long userId, NotificationMessage msg) {
+        sseEmitterService.send(userId, msg);
+
+        try {
+            String key  = PENDING_KEY_PREFIX + userId;
+            String json = redisObjectMapper.writeValueAsString(msg);
+            stringRedisTemplate.opsForList().leftPush(key, json);
+            stringRedisTemplate.expire(key, PENDING_TTL);
+        } catch (Exception e) {
+            log.warn("알림 Redis 저장 실패 - userId: {}", userId, e);
+        }
+    }
+
+    // 재연결 시 미전달 알림 조회 후 목록 삭제
+    public List<NotificationMessage> flushPending(Long userId) {
+        String key = PENDING_KEY_PREFIX + userId;
+        List<String> raw = stringRedisTemplate.opsForList().range(key, 0, -1);
+        stringRedisTemplate.delete(key);
+
+        if (raw == null || raw.isEmpty()) return List.of();
+
+        // leftPush로 최신이 앞에 있으므로 reverse → 오래된 순서로 반환 (프론트에서 unshift 시 최신이 위로)
+        java.util.Collections.reverse(raw);
+        return raw.stream()
+                .map(json -> {
+                    try { return redisObjectMapper.readValue(json, NotificationMessage.class); }
+                    catch (Exception e) { return null; }
+                })
+                .filter(m -> m != null)
+                .toList();
     }
 }

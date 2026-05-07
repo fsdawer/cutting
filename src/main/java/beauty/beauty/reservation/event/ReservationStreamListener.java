@@ -72,8 +72,11 @@ public class ReservationStreamListener implements StreamListener<String, MapReco
 
         try {
             // [Flow 1] Stream에서 수신한 ID로 DB에서 최신 예약 상태를 조회합니다. (정합성 보장)
+            // findByIdWithNotificationData: user/stylistProfile.user를 즉시 로딩 —
+            // @Transactional이 raw bean에 미적용되어 findById 후 엔티티가 detach되고,
+            // @Async 스레드에서 Lazy 연관관계 접근 시 LazyInitializationException 발생 방지
             Long reservationId = Long.parseLong(reservationIdStr);
-            Reservation reservation = reservationRepository.findById(reservationId)
+            Reservation reservation = reservationRepository.findByIdWithNotificationData(reservationId)
                     .orElseThrow(() -> new IllegalArgumentException("예약을 찾을 수 없습니다. ID: " + reservationId));
 
             // [Flow 2] 타 도메인 로직 호출 - 1 (랭킹 갱신)

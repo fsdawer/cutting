@@ -3,6 +3,7 @@ package beauty.beauty.reservation.service;
 import beauty.beauty.chat.entity.ChatRoom;
 import beauty.beauty.chat.repository.ChatRoomRepository;
 import beauty.beauty.chat.service.ChatServiceImpl;
+import beauty.beauty.reservation.dto.CursorResponse;
 import beauty.beauty.reservation.dto.ReservationRequest;
 import beauty.beauty.reservation.dto.ReservationResponse;
 import beauty.beauty.reservation.entity.Reservation;
@@ -31,6 +32,10 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.io.File;
 import java.io.IOException;
@@ -214,15 +219,33 @@ public class ReservationServiceImpl implements ReservationService {
 
 
 
-    // 3. 내 예약 리스트 (마이페이지용)
+    // 3. 내 예약 리스트 (마이페이지용) — Offset 방식 (하위 호환 유지)
     @Override
     @Transactional(readOnly = true)
-    public List<ReservationResponse> getMyReservations(Long userId) {
-        List<Reservation> reservations = reservationRepository.findByUserIdOrderByCreatedAtDesc(userId);
-        Map<Long, Long> chatRoomIdMap = buildChatRoomIdMap(reservations);
-        return reservations.stream()
+    public Page<ReservationResponse> getMyReservations(Long userId, Pageable pageable) {
+        Page<Reservation> page = reservationRepository.findByUserIdWithDetails(userId, pageable);
+        Map<Long, Long> chatRoomIdMap = buildChatRoomIdMap(page.getContent());
+        return page.map(r -> ReservationResponse.from(r, chatRoomIdMap.get(r.getId())));
+    }
+
+    // 3-1. 내 예약 리스트 Cursor 방식 — No-Offset, PK 범위 조건으로 항상 size개만 읽음
+    @Override
+    @Transactional(readOnly = true)
+    public CursorResponse<ReservationResponse> getMyReservationsCursor(Long userId, Long lastId, int size) {
+        // size+1개를 가져와서 hasMore 판단 (추가 쿼리 없이)
+        List<Reservation> rows = reservationRepository.findByUserIdCursor(
+                userId, lastId, PageRequest.of(0, size + 1));
+
+        boolean hasMore = rows.size() > size;
+        List<Reservation> content = hasMore ? rows.subList(0, size) : rows;
+
+        Map<Long, Long> chatRoomIdMap = buildChatRoomIdMap(content);
+        List<ReservationResponse> responses = content.stream()
                 .map(r -> ReservationResponse.from(r, chatRoomIdMap.get(r.getId())))
                 .toList();
+
+        Long nextCursorId = content.isEmpty() ? null : content.get(content.size() - 1).getId();
+        return CursorResponse.of(responses, hasMore, nextCursorId);
     }
 
 
@@ -293,18 +316,26 @@ public class ReservationServiceImpl implements ReservationService {
 
 
 
-    // 6. 미용사 예약 리스트 (예약 관리용)
+    // 6. 미용사 예약 리스트 (예약 관리용) — Cursor 방식
     @Override
     @Transactional(readOnly = true)
-    public List<ReservationResponse> getStylistReservations(Long userId) {
+    public CursorResponse<ReservationResponse> getStylistReservations(Long userId, Long lastId, int size) {
         StylistProfile stylistProfile = stylistProfileRepository.findByUserId(userId)
                 .orElseThrow(() -> new IllegalArgumentException("미용사 프로필이 없습니다"));
 
-        List<Reservation> reservations = reservationRepository.findByStylistProfileId(stylistProfile.getId());
-        Map<Long, Long> chatRoomIdMap = buildChatRoomIdMap(reservations);
-        return reservations.stream()
+        List<Reservation> rows = reservationRepository.findByStylistProfileIdCursor(
+                stylistProfile.getId(), lastId, PageRequest.of(0, size + 1));
+
+        boolean hasMore = rows.size() > size;
+        List<Reservation> content = hasMore ? rows.subList(0, size) : rows;
+
+        Map<Long, Long> chatRoomIdMap = buildChatRoomIdMap(content);
+        List<ReservationResponse> responses = content.stream()
                 .map(r -> ReservationResponse.from(r, chatRoomIdMap.get(r.getId())))
                 .toList();
+
+        Long nextCursorId = content.isEmpty() ? null : content.get(content.size() - 1).getId();
+        return CursorResponse.of(responses, hasMore, nextCursorId);
     }
 
 

@@ -22,6 +22,16 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
 
     Optional<Review> findByReservationId(Long reservationId);
 
+    @Query("SELECT r FROM Review r " +
+           "JOIN FETCH r.stylistProfile sp " +
+           "JOIN FETCH sp.user " +
+           "LEFT JOIN FETCH sp.salon " +
+           "JOIN FETCH r.reservation res " +
+           "JOIN FETCH res.service " +
+           "WHERE r.user.id = :userId " +
+           "ORDER BY r.createdAt DESC")
+    List<Review> findByUserIdWithDetails(@Param("userId") Long userId);
+
     // recalculateScore 단건용
     @Query("SELECT COUNT(r) FROM Review r WHERE r.stylistProfile.id = :stylistId")
     int countByStylistProfileId(@Param("stylistId") Long stylistId);

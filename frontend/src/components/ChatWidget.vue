@@ -18,6 +18,7 @@
             v-for="room in rooms"
             :key="room.roomId"
             class="room-item"
+            :class="{ unread: room.unreadCount > 0 }"
             @click="goToRoom(room)"
           >
             <div class="room-avatar">{{ getPartnerInitial(room) }}</div>
@@ -27,14 +28,16 @@
                 <span class="room-time">{{ formatTime(room.lastMessageAt) }}</span>
               </div>
               <p class="room-salon" v-if="getSalonName(room)">{{ getSalonName(room) }}</p>
-              <p class="room-preview">{{ truncate(room.lastMessageContent) }}</p>
+              <p class="room-preview" :class="{ 'room-preview--unread': room.unreadCount > 0 }">{{ truncate(room.lastMessageContent) }}</p>
             </div>
+            <span v-if="room.unreadCount > 0" class="unread-badge">{{ room.unreadCount > 99 ? '99+' : room.unreadCount }}</span>
           </li>
         </ul>
       </div>
     </Transition>
 
     <button class="chat-fab" @click="toggleChat" :title="isOpen ? '닫기' : '채팅 목록'">
+      <span v-if="!isOpen && totalUnread > 0" class="fab-badge">{{ totalUnread > 9 ? '9+' : totalUnread }}</span>
       <svg v-if="!isOpen" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
       </svg>
@@ -46,7 +49,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { chatApi } from '@/api/chat'
 import { useAuthStore } from '@/stores/authStore'
@@ -57,6 +60,8 @@ const auth   = useAuthStore()
 const isOpen  = ref(false)
 const rooms   = ref([])
 const loading = ref(false)
+
+const totalUnread = computed(() => rooms.value.reduce((sum, r) => sum + (r.unreadCount || 0), 0))
 
 async function toggleChat() {
   isOpen.value = !isOpen.value
@@ -125,6 +130,7 @@ function goToRoom(room) {
 }
 
 .chat-fab {
+  position: relative;
   width: 56px;
   height: 56px;
   border-radius: 50%;
@@ -251,6 +257,28 @@ function goToRoom(room) {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.room-preview--unread { color: var(--text-sub); font-weight: 600; }
+.room-item.unread { background: #f5f8ff; }
+.room-item.unread:hover { background: #eef3ff; }
+
+.unread-badge {
+  flex-shrink: 0;
+  min-width: 20px; height: 20px; border-radius: 10px;
+  background: var(--danger); color: #fff;
+  font-size: 11px; font-weight: 700; line-height: 20px;
+  text-align: center; padding: 0 5px;
+  align-self: center;
+}
+
+.fab-badge {
+  position: absolute; top: -4px; right: -4px;
+  min-width: 18px; height: 18px; border-radius: 9px;
+  background: var(--danger); color: #fff;
+  font-size: 10px; font-weight: 700; line-height: 18px;
+  text-align: center; padding: 0 3px;
+  border: 2px solid #fff;
+  pointer-events: none;
 }
 
 /* Popup transition */

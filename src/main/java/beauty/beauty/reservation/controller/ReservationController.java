@@ -1,10 +1,13 @@
 package beauty.beauty.reservation.controller;
 
 import beauty.beauty.global.annotation.LoginUserId;
+import beauty.beauty.reservation.dto.CursorResponse;
 import beauty.beauty.reservation.dto.ReservationRequest;
 import beauty.beauty.reservation.dto.ReservationResponse;
 import beauty.beauty.reservation.service.ReservationService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -28,13 +31,14 @@ public class ReservationController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    // GET  /api/reservations/my               내 예약 목록
+    // GET  /api/reservations/my?lastId=&size=20    내 예약 목록 (No-Offset Cursor)
+    // lastId 없으면 첫 페이지, 이후엔 이전 응답의 nextCursorId 값 전달
     @GetMapping("/my")
-    public ResponseEntity<List<ReservationResponse>> getMyReservations(@LoginUserId Long userId) {
-
-        List<ReservationResponse> getReservation = reservationService.getMyReservations(userId);
-        return ResponseEntity.ok(getReservation);
-
+    public ResponseEntity<CursorResponse<ReservationResponse>> getMyReservations(
+            @LoginUserId Long userId,
+            @RequestParam(required = false) Long lastId,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(reservationService.getMyReservationsCursor(userId, lastId, size));
     }
 
     // GET  /api/reservations/{id}             예약 상세
@@ -56,10 +60,13 @@ public class ReservationController {
 
 
     // 미용사 전용 ========
-    // 4. 내 미용실 예약 내역 조회
+    // 4. 내 미용실 예약 내역 조회 (No-Offset Cursor)
     @GetMapping("/stylist")
-    public ResponseEntity<List<ReservationResponse>> getStylistReservations(@LoginUserId Long userId) {
-        return ResponseEntity.ok(reservationService.getStylistReservations(userId));
+    public ResponseEntity<CursorResponse<ReservationResponse>> getStylistReservations(
+            @LoginUserId Long userId,
+            @RequestParam(required = false) Long lastId,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(reservationService.getStylistReservations(userId, lastId, size));
     }
 
 

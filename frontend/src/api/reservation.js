@@ -4,8 +4,9 @@ export const reservationApi = {
   /** POST /api/reservations — 예약 생성 */
   create: (data) => api.post('/api/reservations', data),
 
-  /** GET /api/reservations/my — 내 예약 목록 */
-  getMyReservations: () => api.get('/api/reservations/my'),
+  /** GET /api/reservations/my — 내 예약 목록 (No-Offset Cursor) */
+  getMyReservations: (lastId = null, size = 20) =>
+    api.get('/api/reservations/my', { params: { ...(lastId ? { lastId } : {}), size } }),
 
   /** GET /api/reservations/{id} — 예약 상세 */
   getById: (id) => api.get(`/api/reservations/${id}`),
@@ -15,8 +16,9 @@ export const reservationApi = {
 
   // ── 미용사 전용 ──────────────────────────────────────────────
 
-  /** GET /api/reservations/stylist — 내 미용실 예약 목록 (미용사) */
-  getStylistReservations: () => api.get('/api/reservations/stylist'),
+  /** GET /api/reservations/stylist — 내 미용실 예약 목록 (미용사, No-Offset Cursor) */
+  getStylistReservations: (lastId = null, size = 20) =>
+    api.get('/api/reservations/stylist', { params: { ...(lastId ? { lastId } : {}), size } }),
 
   /** PUT /api/reservations/{id}/status — 예약 상태 변경 */
   updateStatus: (id, status) =>
