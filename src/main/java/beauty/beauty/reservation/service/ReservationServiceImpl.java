@@ -269,6 +269,8 @@ public class ReservationServiceImpl implements ReservationService {
         return ReservationResponse.from(reservation, chatRoomId);
     }
 
+
+
     // 5. 예약 취소
     // @CacheEvict(allEntries=true): 취소된 슬롯이 다시 비어야 하므로 캐시를 무효화해야 함
     // 그런데 캐시 키(stylistId:날짜)를 만들려면 reservationId로 DB를 먼저 읽어야 함
@@ -294,9 +296,9 @@ public class ReservationServiceImpl implements ReservationService {
         reservationRepository.save(reservation);
 
         // 빈자리 알림 이벤트 발행 (Redis Streams)
-        long stylistId = reservation.getStylistProfile().getId();
-        LocalDate cancelDate = reservation.getReservedAt().toLocalDate();
-        LocalTime cancelTime = reservation.getReservedAt().toLocalTime();
+        long stylistId = reservation.getStylistProfile().getId(); // 예약된 미용사 아이디
+        LocalDate cancelDate = reservation.getReservedAt().toLocalDate(); // 예약 날짜
+        LocalTime cancelTime = reservation.getReservedAt().toLocalTime(); // 예약 시간
 
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
@@ -363,6 +365,13 @@ public class ReservationServiceImpl implements ReservationService {
         if (reservation.getStatus() == Reservation.Status.CANCELLED
                 || reservation.getStatus() == Reservation.Status.DONE) {
             throw new IllegalStateException("이미 종료된 예약은 상태를 변경할 수 없습니다.");
+        }
+
+        if (newStatus == Reservation.Status.DONE) {
+            LocalDateTime serviceEnd = reservation.getReservedAt().plusMinutes(reservation.getService().getDuration());
+            if(LocalDateTime.now().isBefore(serviceEnd)) {
+                throw new IllegalStateException("아직 시술이 끝나지 않은 예약은 완료 처리 할 수 없습니다");
+            }
         }
 
         reservation.setStatus(newStatus);

@@ -3,7 +3,9 @@ package beauty.beauty.stylist.entity;
 import beauty.beauty.user.entity.User;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.SQLRestriction;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "stylist_profiles", indexes = {
@@ -12,6 +14,7 @@ import java.math.BigDecimal;
     // 리뷰순 정렬: ORDER BY review_count DESC
     @Index(name = "idx_stylist_review_count", columnList = "review_count"),
 })
+@SQLRestriction("deleted_at IS NULL")
 @Getter @Setter
 @NoArgsConstructor @AllArgsConstructor @Builder
 public class StylistProfile {
@@ -44,4 +47,7 @@ public class StylistProfile {
     @Builder.Default
     @Column(name = "favorite_count", nullable = false)
     private int favoriteCount = 0;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
 }

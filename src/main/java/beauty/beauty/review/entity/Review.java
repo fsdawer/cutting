@@ -5,6 +5,7 @@ import beauty.beauty.stylist.entity.StylistProfile;
 import beauty.beauty.user.entity.User;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.SQLRestriction;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -16,8 +17,12 @@ import java.time.LocalDateTime;
     // 내 리뷰 목록: WHERE user_id = ?
     @Index(name = "idx_review_user", columnList = "user_id"),
 })
-@Getter @Setter
-@NoArgsConstructor @AllArgsConstructor @Builder
+@SQLRestriction("deleted_at IS NULL")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class Review {
 
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -44,4 +49,7 @@ public class Review {
     @Builder.Default
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
 }

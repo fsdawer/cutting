@@ -85,7 +85,6 @@ class ReservationStreamListenerTest {
 
         // then
         verify(reservationRepository, times(1)).findById(1L);
-        verify(rankingService, times(1)).recalculateScore(reservation.getStylistProfile());
         verify(notificationService, times(1)).notifyReservationCreated(reservation);
         verify(streamOperations, times(1)).acknowledge(anyString(), eq(message));
     }

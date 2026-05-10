@@ -16,6 +16,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+
 @Service
 @RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
@@ -79,11 +81,12 @@ public class UserServiceImpl implements UserService {
         user.setPassword(passwordEncoder.encode(changePasswordRequest.getNewPassword()));
     }
 
+
     @Override
     @Transactional
     public void deleteMe(Long userId) {
         User user = findUserById(userId);
-        userRepository.delete(user);
+        user.setDeletedAt(Instant.now());
     }
 
     @Override

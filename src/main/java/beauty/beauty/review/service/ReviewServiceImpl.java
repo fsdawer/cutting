@@ -8,7 +8,6 @@ import beauty.beauty.review.dto.ReviewRequest;
 import beauty.beauty.review.dto.ReviewResponse;
 import beauty.beauty.review.dto.ReviewUpdateRequest;
 import beauty.beauty.review.dto.SalonReviewsResponse;
-import beauty.beauty.review.entity.Review;
 import beauty.beauty.review.repository.ReviewRepository;
 import beauty.beauty.stylist.entity.StylistProfile;
 import beauty.beauty.stylist.repository.StylistProfileRepository;
@@ -20,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -37,6 +37,7 @@ public class ReviewServiceImpl implements ReviewService {
     // 유저 아이디를 파라미터로 넘겨 받았으니까 유저 아이디를 디비에서 확인할 필요 없고
     // 본인 예약인지만 확인하면 됨
     @Override
+    @Transactional
     public ReviewResponse create(Long userId, ReviewRequest request) {
          Reservation reservation =  reservationRepository.findById(request.getReservationId())
                  .orElseThrow(() -> new IllegalArgumentException("예약이 없습니다"));
@@ -123,6 +124,7 @@ public class ReviewServiceImpl implements ReviewService {
 
     // 리뷰 수정
     @Override
+    @Transactional
     public ReviewResponse update(Long userId, Long reviewId, ReviewUpdateRequest request) {
         Review review = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new CustomException(ErrorCode.REVIEW_NOT_FOUND));
@@ -156,6 +158,7 @@ public class ReviewServiceImpl implements ReviewService {
 
     // 리뷰 삭제
     @Override
+    @Transactional
     public void delete(Long userId, Long reviewId) {
         Review review = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new CustomException(ErrorCode.REVIEW_NOT_FOUND));
@@ -165,25 +168,22 @@ public class ReviewServiceImpl implements ReviewService {
         }
 
         StylistProfile stylistProfile = review.getStylistProfile();
-        reviewRepository.delete(review);
+        review.setDeletedAt(LocalDateTime.now());
         recalculateRating(stylistProfile);
 
     }
 
 
     private void recalculateRating(StylistProfile stylistProfile) {
-        List<Review> reviews = reviewRepository.findByStylistProfileId(stylistProfile.getId());
-
-        if (reviews.isEmpty()) {
+        Object[] stats = reviewRepository.calcRatingStats(stylistProfile.getId());
+        long count = stats[1] != null ? ((Number) stats[1]).longValue() : 0L;
+        if (count == 0) {
             stylistProfile.setRating(BigDecimal.ZERO);
             stylistProfile.setReviewCount(0);
         } else {
-            BigDecimal avg = reviews.stream()
-                    .map(Review::getRating)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add)
-                    .divide(BigDecimal.valueOf(reviews.size()), 1, RoundingMode.HALF_UP);
+            BigDecimal avg = new BigDecimal(stats[0].toString()).setScale(1, RoundingMode.HALF_UP);
             stylistProfile.setRating(avg);
-            stylistProfile.setReviewCount(reviews.size());
+            stylistProfile.setReviewCount((int) count);
         }
     }
 }

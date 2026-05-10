@@ -32,6 +32,10 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
            "ORDER BY r.createdAt DESC")
     List<Review> findByUserIdWithDetails(@Param("userId") Long userId);
 
+    // recalculateRating 전용 — AVG + COUNT를 한 쿼리로
+    @Query("SELECT AVG(r.rating), COUNT(r) FROM Review r WHERE r.stylistProfile.id = :stylistId")
+    Object[] calcRatingStats(@Param("stylistId") Long stylistId);
+
     // recalculateScore 단건용
     @Query("SELECT COUNT(r) FROM Review r WHERE r.stylistProfile.id = :stylistId")
     int countByStylistProfileId(@Param("stylistId") Long stylistId);

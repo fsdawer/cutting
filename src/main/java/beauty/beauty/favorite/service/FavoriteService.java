@@ -36,11 +36,10 @@ public class FavoriteService {
         StylistProfile stylistProfile = stylistProfileRepository.findById(stylistProfileId)
                 .orElseThrow(() -> new IllegalArgumentException("Stylist not found"));
 
-        boolean exists = favoriteStylistRepository.existsByUserIdAndStylistProfileId(userId, stylistProfileId);
+        var existing = favoriteStylistRepository.findByUserIdAndStylistProfileId(userId, stylistProfileId);
 
-        if (exists) {
-            favoriteStylistRepository.findByUserIdAndStylistProfileId(userId, stylistProfileId)
-                    .ifPresent(favoriteStylistRepository::delete);
+        if (existing.isPresent()) {
+            favoriteStylistRepository.delete(existing.get());
             stylistProfileRepository.decrementFavoriteCount(stylistProfileId);
             return false;
         } else {

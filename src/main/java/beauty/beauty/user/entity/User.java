@@ -2,10 +2,14 @@ package beauty.beauty.user.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.SQLRestriction;
+
+import java.time.Instant;
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "users")
+@SQLRestriction("deleted_at IS NULL") // soft delte
 @Getter
 @Setter
 @NoArgsConstructor @AllArgsConstructor @Builder
@@ -54,6 +58,10 @@ public class User {
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
+
 
     // DB 저장 직전에 자동 호출 → builder/생성자 방식 모두 안전하게 세팅
     @PrePersist

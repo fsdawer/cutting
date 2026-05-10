@@ -29,6 +29,46 @@
         </div>
       </div>
 
+      <!-- 매출 통계 -->
+      <div class="card dash-card">
+        <h2 class="dash-title">매출 통계</h2>
+        <div class="dash-filter">
+          <input v-model="dashStart" type="date" class="form-input date-input" />
+          <span class="dash-sep">~</span>
+          <input v-model="dashEnd" type="date" class="form-input date-input" />
+          <button class="btn btn-primary btn-sm" @click="loadDashboard">조회</button>
+        </div>
+        <div v-if="dashStats.length" class="dash-summary">
+          <div class="summary-card">
+            <span class="summary-label">총 매출</span>
+            <span class="summary-value">{{ totalRevenue.toLocaleString() }}원</span>
+          </div>
+          <div class="summary-card">
+            <span class="summary-label">예약 건수</span>
+            <span class="summary-value">{{ totalReservations }}건</span>
+          </div>
+          <div class="summary-card">
+            <span class="summary-label">취소 건수</span>
+            <span class="summary-value cancel">{{ totalCancels }}건</span>
+          </div>
+        </div>
+        <table v-if="dashStats.length" class="dash-table">
+          <thead>
+            <tr><th>날짜</th><th>예약</th><th>취소</th><th>매출</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="s in dashStats" :key="s.statDate">
+              <td>{{ s.statDate }}</td>
+              <td>{{ s.reservationCount }}건</td>
+              <td>{{ s.cancelCount }}건</td>
+              <td>{{ s.totalRevenue.toLocaleString() }}원</td>
+            </tr>
+          </tbody>
+        </table>
+        <p v-else-if="dashLoaded" class="empty-msg">해당 기간의 데이터가 없습니다.</p>
+        <p v-if="dashError" class="msg-error">{{ dashError }}</p>
+      </div>
+
       <!-- 탭 -->
       <div class="tab-bar">
         <button v-for="tab in tabs" :key="tab.value" class="tab-btn" :class="{ active: activeTab === tab.value }" @click="activeTab = tab.value">
@@ -109,6 +149,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { reservationApi } from '@/api/reservation'
+import { stylistApi } from '@/api/stylist'
 
 const loading = ref(false)
 const loadingMore = ref(false)
@@ -161,7 +202,31 @@ async function updateStatus(id, status) {
   catch (e) { alert(e.response?.data?.message || '상태 변경 오류') }
 }
 
-onMounted(() => loadReservations())
+// ── 매출 통계 ─────────────────────────────────────────────────────
+const today = new Date().toISOString().slice(0, 10)
+const firstOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10)
+const dashStart = ref(firstOfMonth)
+const dashEnd = ref(today)
+const dashStats = ref([])
+const dashLoaded = ref(false)
+const dashError = ref('')
+
+const totalRevenue = computed(() => dashStats.value.reduce((s, r) => s + r.totalRevenue, 0))
+const totalReservations = computed(() => dashStats.value.reduce((s, r) => s + r.reservationCount, 0))
+const totalCancels = computed(() => dashStats.value.reduce((s, r) => s + r.cancelCount, 0))
+
+async function loadDashboard() {
+  dashError.value = ''
+  try {
+    const res = await stylistApi.getDashboardStats(dashStart.value, dashEnd.value)
+    dashStats.value = res.data
+    dashLoaded.value = true
+  } catch (e) {
+    dashError.value = e.response?.data?.message || '조회 실패'
+  }
+}
+
+onMounted(() => { loadReservations(); loadDashboard() })
 </script>
 
 <style scoped>
@@ -216,9 +281,28 @@ onMounted(() => loadReservations())
 .img-thumb { width: 80px; height: 80px; object-fit: cover; display: block; transition: var(--transition); }
 .img-thumb:hover { opacity: 0.8; }
 
+/* Dashboard */
+.dash-card { padding: 20px; margin-bottom: 24px; }
+.dash-title { font-size: 13px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 16px; }
+.dash-filter { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; }
+.dash-sep { color: var(--text-muted); }
+.date-input { width: 140px; }
+.dash-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+.summary-card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px; text-align: center; }
+.summary-label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 6px; }
+.summary-value { font-size: 20px; font-weight: 700; color: var(--text-primary); }
+.summary-value.cancel { color: var(--danger); }
+.dash-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.dash-table th { text-align: left; padding: 8px 12px; font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 2px solid var(--border); }
+.dash-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+.dash-table tr:last-child td { border-bottom: none; }
+.empty-msg { text-align: center; color: var(--text-muted); padding: 24px 0; font-size: 14px; }
+.msg-error { color: var(--danger); font-size: 13px; margin-top: 8px; }
+
 @media (max-width: 768px) {
   .stat-row { grid-template-columns: repeat(2, 1fr); }
   .rc-body { flex-direction: column; }
   .rc-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .dash-summary { grid-template-columns: 1fr 1fr; }
 }
 </style>

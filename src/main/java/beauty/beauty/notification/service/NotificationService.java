@@ -44,6 +44,8 @@ public class NotificationService {
         sendAndPersist(clientUserId, msg);
     }
 
+
+
     @Async("reservationTaskExecutor")
     public void notifyWaitingAvailable(Long userId, LocalDate date, LocalTime time) {
         String dateLabel = date.getMonthValue() + "월 " + date.getDayOfMonth() + "일 " + time;
@@ -54,6 +56,7 @@ public class NotificationService {
                 .build();
         sendAndPersist(userId, msg);
     }
+
 
     @Async("reservationTaskExecutor")
     public void sendReminderAsync(Reservation reservation, String timing) {

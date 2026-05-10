@@ -140,9 +140,9 @@ import { stylistApi } from '@/api/stylist'
 
 const activeSection = ref('basic')
 const sections = [
-  { id: 'basic',    label: '기본 정보' },
-  { id: 'hours',    label: '영업시간' },
-  { id: 'services', label: '서비스 메뉴' },
+  { id: 'basic',     label: '기본 정보' },
+  { id: 'hours',     label: '영업시간' },
+  { id: 'services',  label: '서비스 메뉴' },
 ]
 const serviceCategories = ['커트', '일반펌', '열펌', '염색', '클리닉', '기타']
 
@@ -214,6 +214,7 @@ async function saveServices() {
 
 function addService() { services.value.push({ name: '', category: '커트', durationMinutes: 60, price: 0, description: '', isNew: true }) }
 function removeService(idx, svc) { if (svc.id && !svc.isNew) deletedServiceIds.value.push(svc.id); services.value.splice(idx, 1) }
+
 </script>
 
 <style scoped>
@@ -292,6 +293,7 @@ function removeService(idx, svc) { if (svc.id && !svc.isNew) deletedServiceIds.v
 .save-row { display: flex; justify-content: flex-end; margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border); }
 .msg-success { color: var(--success); font-size: 13px; margin-top: 8px; }
 .msg-error   { color: var(--danger); font-size: 13px; margin-top: 8px; }
+
 
 @media (max-width: 768px) {
   .manage-layout { grid-template-columns: 1fr; }

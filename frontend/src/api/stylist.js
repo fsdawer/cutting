@@ -32,4 +32,8 @@ export const stylistApi = {
   /** GET /api/stylists/nearby — 위치 기반 주변 미용사 조회 */
   getNearbyStylists: (lat, lng, radius = 3000) =>
     api.get('/api/stylists/nearby', { params: { lat, lng, radius } }),
+
+  /** GET /api/stylist/dashboard/stats — 매출 통계 조회 */
+  getDashboardStats: (startDate, endDate) =>
+    api.get('/api/stylist/dashboard/stats', { params: { startDate, endDate } }),
 }

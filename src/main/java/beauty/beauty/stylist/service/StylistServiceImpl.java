@@ -138,6 +138,7 @@ public class StylistServiceImpl implements StylistService {
     }
 
     @Override
+    @Transactional
     public ServiceResponse addService(Long userId, ServiceRequest request) {
         StylistProfile profile = stylistProfileRepository.findByUserId(userId)
                 .orElseThrow(() -> new EntityNotFoundException("해당 유저의 미용사 프로필을 찾을 수 없습니다."));
@@ -164,6 +165,7 @@ public class StylistServiceImpl implements StylistService {
     }
 
     @Override
+    @Transactional
     public ServiceResponse updateService(Long userId, Long serviceId, ServiceRequest request) {
         StylistProfile profile = stylistProfileRepository.findByUserId(userId)
                 .orElseThrow(() -> new EntityNotFoundException("해당 유저의 미용사 프로필을 찾을 수 없습니다."));
@@ -196,6 +198,7 @@ public class StylistServiceImpl implements StylistService {
     }
 
     @Override
+    @Transactional
     public void deleteService(Long userId, Long serviceId) {
         StylistProfile profile = stylistProfileRepository.findByUserId(userId)
                 .orElseThrow(() -> new EntityNotFoundException("해당 유저의 미용사 프로필을 찾을 수 없습니다."));
@@ -212,6 +215,7 @@ public class StylistServiceImpl implements StylistService {
     }
 
     @Override
+    @Transactional
     public WorkingHoursResponse updateHours(Long userId, WorkingHoursRequest request) {
         StylistProfile profile = stylistProfileRepository.findByUserId(userId)
                 .orElseThrow(() -> new EntityNotFoundException("해당 유저의 미용사 프로필을 찾을 수 없습니다."));

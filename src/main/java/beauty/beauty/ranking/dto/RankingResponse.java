@@ -30,16 +30,4 @@ public class RankingResponse {
                 .score(score)
                 .build();
     }
-
-    // After 1: Redis 캐시 히트 시 — reviewCount/recentBookings는 score에 이미 반영됨
-    public static RankingResponse fromCache(StylistProfile sp, double score) {
-        return RankingResponse.builder()
-                .stylistId(sp.getId())
-                .stylistName(sp.getUser().getName())
-                .salonName(sp.getSalon() != null ? sp.getSalon().getName() : null)
-                .district(sp.getSalon() != null ? sp.getSalon().getDistrict() : null)
-                .avgRating(sp.getRating().doubleValue())
-                .score(score)
-                .build();
-    }
 }

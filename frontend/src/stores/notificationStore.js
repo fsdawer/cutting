@@ -55,11 +55,19 @@ export const useNotificationStore = defineStore('notification', () => {
     notifications.value = []
   }
 
+  let retryTimer = null
+  let currentUserId = null
+  let currentToken = null
+
   function connect(userId, token) {
     if (eventSource) return
+    currentUserId = userId
+    currentToken  = token
+    _open()
+  }
 
-    // EventSource는 커스텀 헤더 미지원 → token을 query param으로 전달
-    const url = `http://localhost:8080/api/notifications/stream?token=${encodeURIComponent(token)}`
+  function _open() {
+    const url = `http://localhost:8080/api/notifications/stream?token=${encodeURIComponent(currentToken)}`
     eventSource = new EventSource(url)
 
     eventSource.addEventListener('notification', (e) => {
@@ -70,11 +78,24 @@ export const useNotificationStore = defineStore('notification', () => {
       }
     })
 
-    eventSource.onopen  = () => { connected.value = true  }
-    eventSource.onerror = () => { connected.value = false }
+    eventSource.onopen = () => {
+      connected.value = true
+      if (retryTimer) { clearTimeout(retryTimer); retryTimer = null }
+    }
+
+    // EventSource가 CLOSED 상태(readyState===2)면 자동 retry를 포기한 것 → 직접 재연결
+    // CONNECTING(0) / OPEN(1) 상태면 브라우저가 알아서 재시도하므로 내버려 둠
+    eventSource.onerror = () => {
+      connected.value = false
+      if (eventSource?.readyState === EventSource.CLOSED) {
+        eventSource = null
+        retryTimer = setTimeout(_open, 5000)
+      }
+    }
   }
 
   function disconnect() {
+    if (retryTimer) { clearTimeout(retryTimer); retryTimer = null }
     eventSource?.close()
     eventSource = null
     connected.value = false
